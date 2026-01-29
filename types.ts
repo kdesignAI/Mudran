@@ -51,7 +51,13 @@ export interface AppSettings {
   themeColor: string;
   logoUrl?: string;
   invoiceHeader?: string;
+  contactPhone?: string;
+  contactWebsite?: string;
   whatsappTemplates?: WhatsAppTemplate[];
+  // Platform Social Links
+  whatsappGroupLink?: string;
+  facebookPageLink?: string;
+  telegramChannelLink?: string;
 }
 
 export interface Customer {
@@ -87,7 +93,7 @@ export interface OrderItem {
   paperType?: string;
   printSide?: 'Single' | 'Double';
   colorMode?: '1 Color' | '2 Color' | '3 Color' | '4 Color' | 'Full Color' | 'B/W';
-  designLink?: string; // New: Design file link or specific note
+  designLink?: string; 
 }
 
 export interface WhatsAppLog {
@@ -115,7 +121,7 @@ export interface Order {
   pressStage?: 'PLATE' | 'PRINT' | 'BIND' | 'COMPLETE';
   pressStartTime?: string;
   whatsappLogs?: WhatsAppLog[];
-  orderNote?: string; // New: General order instructions for invoice
+  orderNote?: string; 
 }
 
 export interface PaymentRecord {

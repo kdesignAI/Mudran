@@ -1,14 +1,16 @@
 
 import React, { useState } from 'react';
-import { Workspace, WorkspaceStatus } from '../types';
-import { ShieldAlert, CheckCircle, XCircle, Clock, Calendar, Search, Users, ExternalLink, Phone, Printer, ToggleLeft, ToggleRight, MessageCircle, Send, Bell, Tag, X, Sparkles, AlertTriangle, ShieldX } from 'lucide-react';
+import { Workspace, WorkspaceStatus, AppSettings } from '../types';
+import { ShieldAlert, CheckCircle, XCircle, Clock, Calendar, Search, Users, ExternalLink, Phone, Printer, ToggleLeft, ToggleRight, MessageCircle, Send, Bell, Tag, X, Sparkles, AlertTriangle, ShieldX, Facebook, Globe, Share2 } from 'lucide-react';
 
 interface SuperAdminPanelProps {
   workspaces: Workspace[];
   setWorkspaces: (workspaces: Workspace[]) => void;
+  settings: AppSettings;
+  setSettings: (settings: AppSettings) => void;
 }
 
-const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ workspaces, setWorkspaces }) => {
+const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ workspaces, setWorkspaces, settings, setSettings }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(null);
   const [customMessage, setCustomMessage] = useState('');
@@ -61,6 +63,11 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ workspaces, setWorksp
     });
     setWorkspaces(updated);
     localStorage.setItem('mudran_saas_workspaces', JSON.stringify(updated));
+  };
+
+  const handleGlobalSettingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setSettings({ ...settings, [name]: value });
   };
 
   const openWhatsApp = (msg?: string) => {
@@ -121,6 +128,58 @@ const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ workspaces, setWorksp
            System Access: Super Admin Mode
         </div>
       </header>
+
+      {/* Global Branding & Social Links */}
+      <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
+         <div className="flex items-center gap-2 mb-6 border-b border-slate-50 pb-4">
+            <Share2 className="text-cyan-600" size={20} />
+            <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest">Platform Social Links (Login Page)</h3>
+         </div>
+         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-1.5">
+               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                  <MessageCircle size={14} className="text-emerald-500" /> WhatsApp Group Link
+               </label>
+               <input 
+                type="text" 
+                name="whatsappGroupLink"
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs font-medium"
+                placeholder="https://chat.whatsapp.com/..."
+                value={settings.whatsappGroupLink || ''}
+                onChange={handleGlobalSettingChange}
+               />
+            </div>
+            <div className="space-y-1.5">
+               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                  <Facebook size={14} className="text-blue-600" /> Facebook Page/Group Link
+               </label>
+               <input 
+                type="text" 
+                name="facebookPageLink"
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-600/20 outline-none text-xs font-medium"
+                placeholder="https://facebook.com/..."
+                value={settings.facebookPageLink || ''}
+                onChange={handleGlobalSettingChange}
+               />
+            </div>
+            <div className="space-y-1.5">
+               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                  <Send size={14} className="text-sky-500" /> Telegram Channel Link
+               </label>
+               <input 
+                type="text" 
+                name="telegramChannelLink"
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-sky-500/20 outline-none text-xs font-medium"
+                placeholder="https://t.me/..."
+                value={settings.telegramChannelLink || ''}
+                onChange={handleGlobalSettingChange}
+               />
+            </div>
+         </div>
+         <div className="mt-4 p-3 bg-cyan-50/50 rounded-xl border border-cyan-100 flex items-center gap-2 text-[10px] font-bold text-cyan-700 italic">
+            <Globe size={14} /> এই লিংকগুলো লগইন পেজের "Join with us" সেকশনে অটোমেটিক আপডেট হয়ে যাবে।
+         </div>
+      </div>
 
       {/* WhatsApp Message Modal */}
       {isMessageModalOpen && selectedWorkspace && (

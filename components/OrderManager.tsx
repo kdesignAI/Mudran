@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Order, OrderItem, OrderStatus, Customer, InventoryItem, AppSettings, WhatsAppLog } from '../types';
-import { Plus, Trash2, Printer, Search, X, Phone, MapPin, Tag, Zap, Send, PlusCircle, Layers, CopyCheck, Percent, FileText, Link as LinkIcon, AlertCircle, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Printer, Search, X, Phone, MapPin, Tag, Zap, Send, PlusCircle, Layers, CopyCheck, Percent, FileText, Link as LinkIcon, AlertCircle, ChevronDown, Globe, MessageCircle } from 'lucide-react';
 import { smartSearch } from '../utils/searchUtils';
 
 interface OrderManagerProps {
@@ -18,6 +18,13 @@ const SQFT_BASED_CATEGORIES = [
   'Flex', 'PVC', 'PANAFLEX', 'VINYL', 'REFLECTIVE STIKER', '3D STIKER', 
   'CLEAR STIKER', 'BLOCK LIGHT PVC', 'ONE WAY VISION', 
   'SPARKLE LAMINATION', 'MAT LAMINATION', 'NORMAL GLOSSY LAMINATION'
+];
+
+const COMMON_PAPER_TYPES = [
+  '80gsm Offset', '100gsm Offset', '120gsm Offset', '60gsm Newsprint', 
+  '100gsm Art Paper', '120gsm Art Paper', '150gsm Art Paper', 
+  '250gsm Art Card', '300gsm Art Card', 'Duplex Board', 
+  'Sticker Paper', 'Bond Paper', 'Tracing Paper', 'Tissue Paper'
 ];
 
 const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTransaction, customers, setCustomers, inventory, settings }) => {
@@ -39,10 +46,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
     const defaults = ['Flex', 'Press', 'Gift', ...SQFT_BASED_CATEGORIES];
     return saved ? JSON.parse(saved) : Array.from(new Set(defaults));
   });
-  const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
 
-  // Item Form
   const [currentItems, setCurrentItems] = useState<OrderItem[]>([]);
   const [itemName, setItemName] = useState('');
   const [itemCategory, setItemCategory] = useState<string>('Flex');
@@ -53,16 +57,13 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
   const [designLink, setDesignLink] = useState('');
   const [priority, setPriority] = useState<'URGENT' | 'NORMAL' | 'LOW'>('NORMAL');
 
-  // Press Specific
   const [paperType, setPaperType] = useState('80gsm Offset');
   const [printSide, setPrintSide] = useState<'Single' | 'Double'>('Single');
   const [colorMode, setColorMode] = useState<'Full Color' | '1 Color' | '2 Color' | '3 Color' | '4 Color' | 'B/W'>('Full Color');
 
-  // Summary
   const [discount, setDiscount] = useState<string>('0');
   const [advance, setAdvance] = useState<string>('0');
   const [orderNote, setOrderNote] = useState('');
-  const [isDiscountFromProfile, setIsDiscountFromProfile] = useState(false);
 
   const inputClass = "w-full p-3 border border-slate-200 rounded-2xl bg-white text-slate-800 focus:ring-4 focus:ring-cyan-500/10 outline-none placeholder:text-slate-400 transition-all text-sm shadow-sm";
   const labelClass = "block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1";
@@ -95,20 +96,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
     const dueAmount = grandTotal - adv;
     return { subTotal, grandTotal, dueAmount };
   };
-
-  useEffect(() => {
-    const subTotal = currentItems.reduce((acc, item) => acc + (item.total || 0), 0);
-    if (selectedCustomer && subTotal > 0) {
-      let calcDisc = 0;
-      if (selectedCustomer.defaultDiscountType === 'PERCENTAGE' && selectedCustomer.defaultDiscountValue) {
-        calcDisc = Math.round((subTotal * selectedCustomer.defaultDiscountValue) / 100);
-      } else if (selectedCustomer.defaultDiscountType === 'FIXED' && selectedCustomer.defaultDiscountValue) {
-        calcDisc = selectedCustomer.defaultDiscountValue;
-      }
-      setDiscount(calcDisc.toString());
-      setIsDiscountFromProfile(calcDisc > 0);
-    }
-  }, [selectedCustomer, currentItems.length]);
 
   const handleAddItem = () => {
     if (!itemName || parseFloat(rate) <= 0 || parseFloat(quantity) <= 0) return;
@@ -179,6 +166,23 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
     setCurrentItems([]); setDiscount('0'); setAdvance('0'); setOrderNote(''); setPriority('NORMAL');
   };
 
+  const handleStatusChange = (orderId: string, newStatus: OrderStatus) => {
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+  };
+
+  const handleSendStatusWhatsApp = (order: Order) => {
+    const statusMessages: Record<OrderStatus, string> = {
+      [OrderStatus.PENDING]: `আসসালামু আলাইকুম ${order.customer.name}, আপনার অর্ডার #${order.orderNumber.split('-').pop()} আমাদের সিস্টেমে গ্রহণ করা হয়েছে। কাজ শুরু হলে আপনাকে আপডেট দেওয়া হবে। ধন্যবাদ - ${settings.softwareName}।`,
+      [OrderStatus.PROCESSING]: `আসসালামু আলাইকুম ${order.customer.name}, আপনার অর্ডার #${order.orderNumber.split('-').pop()} এর কাজ বর্তমানে প্রোডাকশনে চলমান আছে। কাজ সম্পন্ন হলে দ্রুত আপনাকে জানানো হবে। ধন্যবাদ।`,
+      [OrderStatus.READY]: `আসসালামু আলাইকুম ${order.customer.name}, আপনার অর্ডার #${order.orderNumber.split('-').pop()} এখন ডেলিভারির জন্য সম্পূর্ণ প্রস্তুত। অনুগ্রহ করে আমাদের অফিস থেকে সংগ্রহ করুন। ধন্যবাদ।`,
+      [OrderStatus.DELIVERED]: `আসসালামু আলাইকুম ${order.customer.name}, আপনার অর্ডার #${order.orderNumber.split('-').pop()} সফলভাবে ডেলিভারি করা হয়েছে। আমাদের সেবা গ্রহণ করার জন্য আপনাকে ধন্যবাদ।`,
+    };
+
+    const msg = statusMessages[order.status];
+    const phone = order.customer.phone.startsWith('0') ? '88' + order.customer.phone : order.customer.phone;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
   const filteredOrders = smartSearch<Order>(orders, searchTerm, ['orderNumber', 'customer.name', 'customer.phone']).filter(o => 
     (filterStatus === 'ALL' || o.status === filterStatus) && 
     (filterCategory === 'ALL' || o.items.some(i => i.category === filterCategory))
@@ -192,10 +196,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
           <h2 className="text-xl sm:text-2xl font-black text-slate-800 flex items-center gap-2"><PlusCircle className="text-cyan-600" /> নতুন অর্ডার</h2>
           <button onClick={() => setView('LIST')} className="text-xs font-black uppercase text-slate-400 hover:text-red-500 bg-slate-100 px-4 py-2 rounded-xl">বন্ধ করুন</button>
         </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-4 space-y-6">
-             {/* Customer Selection */}
              <div className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
                 <label className={labelClass}>অর্ডার প্রায়োরিটি</label>
                 <div className="grid grid-cols-3 gap-2 mb-6">
@@ -220,8 +222,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
                   </div>
                 )}
              </div>
-
-             {/* Order Summary Table/View for Mobile */}
              <div className="bg-slate-900 p-6 rounded-[2.5rem] text-white space-y-4 shadow-xl lg:sticky lg:top-6">
                 <div className="flex justify-between font-black text-lg border-b border-white/10 pb-3">
                   <span className="text-[10px] uppercase text-slate-400 tracking-widest self-center">সর্বমোট বিল:</span>
@@ -250,9 +250,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
                 <button onClick={handleCreateOrder} className="w-full py-4 bg-cyan-600 rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-lg hover:brightness-110 active:scale-[0.97] transition-all flex items-center justify-center gap-2">অর্ডার কনফার্ম করুন <Zap size={14} /></button>
              </div>
           </div>
-
           <div className="lg:col-span-8 space-y-6">
-             {/* Add Item Form */}
              <div className="bg-white p-5 sm:p-7 rounded-[2.5rem] border border-slate-100 shadow-sm">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                    <div className="md:col-span-2">
@@ -269,7 +267,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
                       <label className={labelClass}>পরিমাণ (Qty)</label>
                       <input type="number" className={inputClass} value={quantity} onChange={e => setQuantity(e.target.value)} />
                    </div>
-
                    {isItemSqFt ? (
                       <div className="md:col-span-4 grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-3xl border border-slate-100 animate-in slide-in-from-top-1">
                          <div><label className={labelClass}>প্রস্থ (Width ft)</label><input type="number" className={inputClass} value={width} onChange={e => setWidth(e.target.value)} /></div>
@@ -277,12 +274,23 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
                       </div>
                    ) : itemCategory === 'Press' ? (
                       <div className="md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-3xl border border-slate-100 animate-in slide-in-from-top-1">
-                         <div><label className={labelClass}>কাগজের ধরন</label><input className={inputClass} value={paperType} onChange={e => setPaperType(e.target.value)} /></div>
+                         <div>
+                            <label className={labelClass}>কাগজের ধরন</label>
+                            <input 
+                              list="paper-types" 
+                              className={inputClass} 
+                              value={paperType} 
+                              onChange={e => setPaperType(e.target.value)} 
+                              placeholder="সিলেক্ট বা টাইপ করুন..."
+                            />
+                            <datalist id="paper-types">
+                              {COMMON_PAPER_TYPES.map(type => <option key={type} value={type} />)}
+                            </datalist>
+                         </div>
                          <div><label className={labelClass}>প্রিন্ট সাইড</label><select className={inputClass} value={printSide} onChange={e => setPrintSide(e.target.value as any)}><option value="Single">Single Side</option><option value="Double">Double Side</option></select></div>
                          <div><label className={labelClass}>কালার মোড</label><select className={inputClass} value={colorMode} onChange={e => setColorMode(e.target.value as any)}><option value="Full Color">Full Color</option><option value="1 Color">1 Color</option><option value="B/W">B/W (Mono)</option></select></div>
                       </div>
                    ) : null}
-
                    <div className="md:col-span-2">
                       <label className={labelClass}>ডিজাইন লিংক / ফাইল পাথ (ঐচ্ছিক)</label>
                       <div className="relative">
@@ -298,8 +306,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
                       <button onClick={handleAddItem} className="w-full bg-slate-900 text-white h-[50px] rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-black active:scale-[0.97] transition-all flex items-center justify-center gap-2"><Plus size={18}/> আইটেম যোগ</button>
                    </div>
                 </div>
-
-                {/* Items Preview Table */}
                 <div className="border border-slate-100 rounded-3xl overflow-hidden bg-slate-50/50">
                    <div className="overflow-x-auto">
                       <table className="w-full text-xs text-left">
@@ -319,8 +325,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
                                 <p className="font-bold text-slate-800 leading-tight">{item.name}</p>
                                 <div className="flex gap-2 mt-1.5 flex-wrap">
                                   <span className="text-[8px] font-black uppercase text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">[{item.category}]</span>
-                                  {item.designLink && <span className="text-[8px] font-black text-cyan-600 flex items-center gap-1 border border-cyan-100 px-1.5 py-0.5 rounded"><LinkIcon size={10}/> Link</span>}
-                                  {item.paperType && <span className="text-[8px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">[{item.paperType}]</span>}
                                 </div>
                               </td>
                               <td className="px-5 py-4 text-center font-bold text-slate-600">
@@ -347,7 +351,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
 
   return (
     <div className="p-4 sm:p-6 space-y-6 pb-24 lg:pb-6">
-       <div className="flex justify-between items-center">
+       <div className="flex justify-between items-center no-print">
           <div>
             <h2 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">অর্ডার তালিকা</h2>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{filteredOrders.length} টি অর্ডার পাওয়া গেছে</p>
@@ -357,7 +361,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
           </button>
        </div>
 
-       <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden">
+       <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 overflow-hidden no-print">
           <div className="p-4 bg-slate-50/50 flex flex-col sm:flex-row gap-4">
              <div className="relative flex-1">
                 <Search className="absolute left-4 top-3.5 text-slate-400" size={18} />
@@ -365,16 +369,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
              </div>
              <div className="flex gap-2">
                 <select className="bg-white border border-slate-200 px-4 py-3 rounded-2xl text-[10px] font-black uppercase text-slate-400 outline-none flex-1" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-                    <option value="ALL">স্ট্যাটাস</option>
+                    <option value="ALL">স্ট্যাটাস ফিল্টার</option>
                     {Object.values(OrderStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                <select className="bg-white border border-slate-200 px-4 py-3 rounded-2xl text-[10px] font-black uppercase text-slate-400 outline-none flex-1" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
-                    <option value="ALL">ক্যাটাগরি</option>
-                    {allAvailableCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </select>
              </div>
           </div>
-
           <div className="overflow-x-auto">
              <table className="w-full text-xs text-left">
                 <thead className="bg-slate-50 text-slate-400 font-black text-[10px] uppercase tracking-widest border-b border-slate-100">
@@ -382,35 +381,35 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
                      <th className="px-6 sm:px-8 py-5">অর্ডার / গ্রাহক</th>
                      <th className="px-6 py-5 text-center hidden sm:table-cell">স্ট্যাটাস</th>
                      <th className="px-6 sm:px-8 py-5 text-right">আর্থিক (৳)</th>
-                     <th className="px-6 sm:px-8 py-5 text-center">ইনভয়েস</th>
+                     <th className="px-6 sm:px-8 py-5 text-center">অ্যাকশন</th>
                    </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                    {filteredOrders.map(order => (
-                     <tr key={order.id} className="hover:bg-slate-50 transition-colors group">
+                     <tr key={order.id} className="hover:bg-slate-50/50 transition-colors group">
                        <td className="px-6 sm:px-8 py-5">
                           <div className="flex items-center gap-3 sm:gap-4">
-                             <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex flex-col items-center justify-center font-black transition-all ${order.priority === 'URGENT' ? 'bg-rose-500 text-white shadow-lg shadow-rose-200' : 'bg-slate-100 text-slate-500'}`}>
+                             <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex flex-col items-center justify-center font-black transition-all ${order.priority === 'URGENT' ? 'bg-rose-500 text-white shadow-lg shadow-rose-200' : 'bg-slate-900 text-white'}`}>
                                 <span className="text-[7px] opacity-60">ORD</span>
                                 <span className="text-xs">#{order.orderNumber.split('-').pop()}</span>
                              </div>
                              <div>
                                 <p className="font-black text-slate-800 text-sm leading-tight truncate max-w-[120px] sm:max-w-none">{order.customer.name}</p>
-                                <div className="flex items-center gap-1.5 mt-1 sm:hidden">
-                                  <span className={`text-[7px] font-black uppercase px-1.5 py-0.5 rounded ${
-                                    order.status === OrderStatus.DELIVERED ? 'bg-emerald-100 text-emerald-700' : 
-                                    order.status === OrderStatus.READY ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'
-                                  }`}>{order.status}</span>
-                                </div>
-                                <p className="hidden sm:block text-[9px] text-slate-400 font-bold mt-0.5">{order.customer.phone} • {Array.from(new Set(order.items.map(i => i.category))).join(', ')}</p>
+                                <p className="hidden sm:block text-[9px] text-slate-400 font-bold mt-0.5">{order.customer.phone}</p>
                              </div>
                           </div>
                        </td>
                        <td className="px-6 py-5 text-center hidden sm:table-cell">
-                          <span className={`text-[8px] font-black uppercase px-3 py-1 rounded-lg border transition-all ${
-                            order.status === OrderStatus.DELIVERED ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 
-                            order.status === OrderStatus.READY ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-amber-100 text-amber-700 border-amber-200'
-                          }`}>{order.status}</span>
+                          <select 
+                            value={order.status}
+                            onChange={(e) => handleStatusChange(order.id, e.target.value as OrderStatus)}
+                            className={`text-[8px] font-black uppercase px-2 py-1 rounded-lg border outline-none cursor-pointer transition-all text-center appearance-none ${
+                              order.status === OrderStatus.DELIVERED ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 
+                              order.status === OrderStatus.READY ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-amber-100 text-amber-700 border-amber-200'
+                            }`}
+                          >
+                            {Object.values(OrderStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
                        </td>
                        <td className="px-6 sm:px-8 py-5 text-right">
                           <p className="font-black text-slate-800 text-sm">৳{Math.round(order.grandTotal).toLocaleString()}</p>
@@ -419,157 +418,159 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
                           </p>
                        </td>
                        <td className="px-6 sm:px-8 py-5 text-center">
-                          <button onClick={() => setSelectedOrder(order)} className="p-3 text-cyan-600 bg-cyan-50 hover:bg-cyan-100 rounded-[1rem] transition-all shadow-sm"><Printer size={18} /></button>
+                          <div className="flex justify-center gap-2">
+                             <button 
+                                onClick={() => handleSendStatusWhatsApp(order)} 
+                                className="p-2.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-all shadow-sm" 
+                                title="WhatsApp Status Update"
+                             >
+                                <MessageCircle size={16} />
+                             </button>
+                             <button 
+                                onClick={() => setSelectedOrder(order)} 
+                                className="p-2.5 text-cyan-600 bg-cyan-50 hover:bg-cyan-100 rounded-xl transition-all shadow-sm" 
+                                title="Print Invoice"
+                             >
+                                <Printer size={16} />
+                             </button>
+                          </div>
                        </td>
                      </tr>
                    ))}
-                   {filteredOrders.length === 0 && (
-                     <tr><td colSpan={4} className="px-8 py-20 text-center text-slate-300 font-medium italic">কোন অর্ডার পাওয়া যায়নি</td></tr>
-                   )}
                 </tbody>
              </table>
           </div>
        </div>
 
-       {/* INVOICE MODAL - MOBILE RESPONSIVE OVERLAY */}
        {selectedOrder && (
-         <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-0 sm:p-4 backdrop-blur-md no-print">
-            <div className="bg-white w-full h-full sm:h-auto sm:max-w-3xl sm:rounded-[2.5rem] shadow-2xl relative flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
-               <div className="p-5 border-b border-slate-50 flex justify-between items-center bg-white shrink-0 sticky top-0 z-10 safe-top">
-                  <h3 className="text-lg font-black text-slate-800">অর্ডার ইনভয়েস</h3>
+         <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-0 sm:p-4 backdrop-blur-md">
+            <div className="bg-white w-full h-full sm:h-auto sm:max-w-3xl sm:rounded-[1.5rem] shadow-2xl relative flex flex-col overflow-hidden animate-in zoom-in duration-300">
+               <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-white shrink-0 safe-top no-print">
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Globe size={14}/> International Invoice Standard</span>
                   <div className="flex gap-2">
                      <button onClick={() => window.print()} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-black transition-all shadow-md active:scale-95">
-                        <Printer size={16} /> প্রিন্ট
+                        <Printer size={16} /> প্রিন্ট ইনভয়েস
                      </button>
                      <button onClick={() => setSelectedOrder(null)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><X size={24}/></button>
                   </div>
                </div>
                
-               <div className="flex-1 p-6 sm:p-10 bg-white overflow-y-auto print-area safe-bottom">
-                  <div className="space-y-8">
-                     <div className="flex flex-col sm:flex-row justify-between items-start gap-6 border-b-2 border-slate-900 pb-6">
-                        <div className="flex gap-4 items-center">
-                           <div className="w-16 h-16 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black text-2xl overflow-hidden shadow-xl">
+               <div className="flex-1 p-6 sm:p-8 bg-white overflow-y-auto print-area safe-bottom scrollbar-thin">
+                  <div className="space-y-6">
+                     <div className="flex justify-between items-start border-b-2 border-slate-900 pb-5">
+                        <div className="flex gap-3 items-center">
+                           <div className="w-12 h-12 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black text-xl overflow-hidden shadow-lg">
                               {settings.logoUrl ? <img src={settings.logoUrl} className="w-full h-full object-cover"/> : settings.logoText}
                            </div>
                            <div>
-                              <h2 className="text-2xl font-black text-slate-900 tracking-tight">{settings.softwareName}</h2>
-                              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest leading-none">{settings.invoiceHeader}</p>
+                              <h2 className="text-xl font-black text-slate-900 tracking-tight leading-none mb-1">{settings.softwareName}</h2>
+                              <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest">{settings.invoiceHeader}</p>
                            </div>
                         </div>
-                        <div className="text-left sm:text-right w-full sm:w-auto">
-                           <h1 className="text-4xl font-black text-slate-900 mb-1 leading-none">INVOICE</h1>
-                           <p className="font-bold text-slate-500 text-xs tracking-widest uppercase">Invoice No: #{selectedOrder.orderNumber}</p>
+                        <div className="text-right">
+                           <h1 className="text-3xl font-black text-slate-900 leading-none">INVOICE</h1>
+                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">ID: #{selectedOrder.orderNumber}</p>
                         </div>
                      </div>
 
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                        <div>
-                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><FileText size={12}/> গ্রাহকের তথ্য</p>
-                           <h4 className="font-black text-slate-800 text-xl">{selectedOrder.customer.name}</h4>
-                           <p className="text-sm font-bold text-slate-600 mt-1 flex items-center gap-1.5"><Phone size={14} className="text-slate-400"/> {selectedOrder.customer.phone}</p>
-                           {selectedOrder.customer.address && <p className="text-sm text-slate-500 mt-1 flex items-center gap-1.5"><MapPin size={14} className="text-slate-400"/> {selectedOrder.customer.address}</p>}
+                     <div className="grid grid-cols-2 gap-8 py-2">
+                        <div className="space-y-1">
+                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Customer Details</p>
+                           <h4 className="font-black text-slate-800 text-base leading-tight">{selectedOrder.customer.name}</h4>
+                           <p className="text-xs font-bold text-slate-600 flex items-center gap-1.5"><Phone size={12} className="text-slate-400"/> {selectedOrder.customer.phone}</p>
+                           {selectedOrder.customer.address && <p className="text-[10px] text-slate-500 leading-tight flex items-center gap-1.5"><MapPin size={12} className="text-slate-400"/> {selectedOrder.customer.address}</p>}
                         </div>
-                        <div className="sm:text-right">
-                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">অর্ডার তথ্য</p>
-                           <p className="text-sm font-bold text-slate-800">অর্ডার তারিখ: {new Date(selectedOrder.orderDate).toLocaleDateString('bn-BD')}</p>
-                           <p className={`text-[10px] font-black uppercase mt-1.5 px-3 py-1 rounded-full border inline-block ${selectedOrder.priority === 'URGENT' ? 'bg-rose-50 text-rose-500 border-rose-100' : 'bg-slate-50 text-slate-400 border-slate-100'}`}>
-                             Priority: {selectedOrder.priority}
-                           </p>
-                        </div>
-                     </div>
-
-                     <div className="border border-slate-200 rounded-[2rem] overflow-hidden shadow-sm">
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-xs text-left">
-                             <thead className="bg-slate-900 text-white font-black uppercase text-[10px] tracking-widest">
-                                <tr>
-                                   <th className="px-6 py-4">বিবরণ (Description)</th>
-                                   <th className="px-6 py-4 text-center">মাপ/Qty</th>
-                                   <th className="px-6 py-4 text-right">দর</th>
-                                   <th className="px-6 py-4 text-right">মোট</th>
-                                </tr>
-                             </thead>
-                             <tbody className="divide-y divide-slate-100">
-                                {selectedOrder.items.map((item, idx) => (
-                                   <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                      <td className="px-6 py-5">
-                                         <p className="font-black text-slate-800 text-sm leading-tight">{item.name}</p>
-                                         <div className="flex flex-wrap gap-2 mt-2 text-[8px] font-black text-slate-400 uppercase tracking-wider">
-                                            <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{item.category}</span>
-                                            {item.colorMode && <span>• {item.colorMode}</span>}
-                                            {item.paperType && <span>• {item.paperType}</span>}
-                                            {item.printSide && <span className="text-indigo-600">• {item.printSide} Side</span>}
-                                         </div>
-                                      </td>
-                                      <td className="px-6 py-5 text-center font-black text-slate-600">
-                                         {SQFT_BASED_CATEGORIES.includes(item.category) ? `${item.height}x${item.width} (${item.sqFt} sqft)` : `${item.quantity} pcs`}
-                                      </td>
-                                      <td className="px-6 py-5 text-right font-bold text-slate-500">৳{item.rate}</td>
-                                      <td className="px-6 py-5 text-right font-black text-slate-900 text-base">৳{Math.round(item.total)}</td>
-                                   </tr>
-                                ))}
-                             </tbody>
-                          </table>
+                        <div className="text-right space-y-1">
+                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Billing Summary</p>
+                           <div className="space-y-0.5">
+                              <p className="text-xs font-bold text-slate-800">Date: <span className="font-mono">{new Date(selectedOrder.orderDate).toLocaleDateString('bn-BD')}</span></p>
+                              <p className="text-[10px] font-black uppercase text-slate-500">Status: <span className="text-cyan-600">{selectedOrder.status}</span></p>
+                              {selectedOrder.priority === 'URGENT' && <span className="text-[8px] font-black text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100 mt-1 inline-block">Priority: High</span>}
+                           </div>
                         </div>
                      </div>
 
-                     <div className="flex flex-col sm:flex-row justify-between items-start gap-8">
-                        <div className="flex-1 w-full">
+                     <div className="border border-slate-200 rounded-[1.25rem] overflow-hidden shadow-sm">
+                        <table className="w-full text-xs text-left">
+                           <thead className="bg-slate-900 text-white font-black uppercase text-[9px] tracking-widest">
+                              <tr>
+                                 <th className="px-5 py-3">Description</th>
+                                 <th className="px-5 py-3 text-center">Size/Qty</th>
+                                 <th className="px-5 py-3 text-right">Rate</th>
+                                 <th className="px-5 py-3 text-right">Total</th>
+                              </tr>
+                           </thead>
+                           <tbody className="divide-y divide-slate-100">
+                              {selectedOrder.items.map((item, idx) => (
+                                 <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                    <td className="px-5 py-3">
+                                       <p className="font-black text-slate-800 text-xs leading-none mb-1">{item.name}</p>
+                                       <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-1.5 py-0.5 rounded">{item.category}</span>
+                                    </td>
+                                    <td className="px-5 py-3 text-center font-bold text-slate-600">
+                                       {SQFT_BASED_CATEGORIES.includes(item.category) ? `${item.height}x${item.width}` : `${item.quantity} pcs`}
+                                    </td>
+                                    <td className="px-5 py-3 text-right text-slate-500 font-mono">৳{item.rate}</td>
+                                    <td className="px-5 py-3 text-right font-black text-slate-900">৳{Math.round(item.total)}</td>
+                                 </tr>
+                              ))}
+                           </tbody>
+                        </table>
+                     </div>
+
+                     <div className="flex flex-col sm:flex-row justify-between items-start gap-6">
+                        <div className="flex-1 w-full sm:max-w-[45%]">
                            {selectedOrder.orderNote && (
-                              <div className="p-5 bg-slate-50 border border-slate-100 rounded-3xl shadow-inner">
-                                 <h5 className="text-[10px] font-black text-slate-400 uppercase mb-2 flex items-center gap-2"><FileText size={12}/> বিশেষ দ্রষ্টব্য:</h5>
-                                 <p className="text-sm text-slate-600 leading-relaxed font-medium italic">"{selectedOrder.orderNote}"</p>
+                              <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl">
+                                 <h5 className="text-[9px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-1.5"><FileText size={12}/> Notes & Instructions:</h5>
+                                 <p className="text-[11px] text-slate-600 leading-snug font-medium italic">"{selectedOrder.orderNote}"</p>
                               </div>
                            )}
+                           <div className="mt-4 flex items-center gap-3">
+                              <div className="p-2.5 bg-white border border-slate-100 rounded-2xl shadow-sm">
+                                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(selectedOrder.orderNumber)}`} alt="QR" className="w-14 h-14 opacity-80"/>
+                              </div>
+                              <div className="space-y-0.5">
+                                 <p className="text-[9px] font-black text-slate-800 uppercase tracking-widest">Verification QR</p>
+                                 <p className="text-[8px] text-slate-400 font-medium">Scan this code to verify invoice authenticity.</p>
+                              </div>
+                           </div>
                         </div>
-                        <div className="w-full sm:w-72 space-y-4">
-                           <div className="flex justify-between text-slate-500 font-bold text-[10px] uppercase tracking-widest">
-                              <span>মোট বিল:</span>
-                              <span className="font-mono">৳{Math.round(selectedOrder.subTotal)}</span>
+
+                        <div className="w-full sm:w-64 bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
+                           <div className="space-y-2 pb-2 border-b border-slate-200">
+                              <div className="flex justify-between text-slate-500 font-bold text-[10px] uppercase">
+                                 <span>Sub-Total:</span>
+                                 <span className="font-mono">৳{Math.round(selectedOrder.subTotal)}</span>
+                              </div>
+                              <div className="flex justify-between text-slate-500 font-bold text-[10px] uppercase">
+                                 <span>Discount:</span>
+                                 <span className="font-mono">-৳{Math.round(selectedOrder.discount)}</span>
+                              </div>
+                              <div className="flex justify-between text-emerald-600 font-black text-[10px] uppercase">
+                                 <span>Received:</span>
+                                 <span className="font-mono">৳{Math.round(selectedOrder.paidAmount)}</span>
+                              </div>
                            </div>
-                           <div className="flex justify-between text-slate-500 font-bold text-[10px] uppercase tracking-widest">
-                              <span>ডিসকাউন্ট:</span>
-                              <span className="font-mono">- ৳{Math.round(selectedOrder.discount)}</span>
-                           </div>
-                           <div className="flex justify-between border-t-2 border-slate-900 pt-4 text-slate-900 font-black text-2xl">
-                              <span className="text-xs self-center uppercase tracking-widest">সর্বমোট:</span>
-                              <span className="font-mono">৳{Math.round(selectedOrder.grandTotal)}</span>
-                           </div>
-                           <div className="flex justify-between text-emerald-600 font-black text-[10px] uppercase tracking-widest">
-                              <span>পরিশোধিত:</span>
-                              <span className="font-mono">৳{Math.round(selectedOrder.paidAmount)}</span>
-                           </div>
-                           <div className="flex justify-between text-rose-600 font-black uppercase bg-rose-50 p-4 rounded-3xl border border-rose-100 shadow-sm">
-                              <span className="text-[10px] self-center tracking-widest">বকেয়া (Due):</span>
-                              <span className="text-2xl font-mono">৳{Math.round(selectedOrder.dueAmount)}</span>
+                           <div className="space-y-1">
+                              <div className="flex justify-between text-slate-900 font-black text-sm uppercase">
+                                 <span>Grand Total:</span>
+                                 <span className="font-mono">৳{Math.round(selectedOrder.grandTotal)}</span>
+                              </div>
+                              <div className={`flex justify-between p-2.5 rounded-xl font-black uppercase text-center mt-2 ${selectedOrder.dueAmount > 0 ? 'bg-rose-600 text-white shadow-lg shadow-rose-200' : 'bg-emerald-600 text-white'}`}>
+                                 <span className="text-[10px] self-center">Net Due:</span>
+                                 <span className="text-xl font-mono leading-none">৳{Math.round(selectedOrder.dueAmount)}</span>
+                              </div>
                            </div>
                         </div>
                      </div>
 
-                     <div className="mt-12 pt-10 border-t-2 border-dashed border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-8">
-                        <div className="space-y-4 w-full sm:w-auto">
-                           <div className="flex gap-4 items-center">
-                              <div className="w-11 h-11 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 border border-slate-100"><Phone size={22} /></div>
-                              <div>
-                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">যোগাযোগ</p>
-                                 <p className="text-sm font-black text-slate-800">+৮৮ ০১৭১১-২২২৩৩৩</p>
-                              </div>
-                           </div>
-                           <div className="flex gap-4 items-center">
-                              <div className="w-11 h-11 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 border border-slate-100"><MapPin size={22} /></div>
-                              <div>
-                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ঠিকানা</p>
-                                 <p className="text-xs font-bold text-slate-800">ঢাকা, বাংলাদেশ</p>
-                              </div>
-                           </div>
+                     <div className="pt-4 border-t border-slate-100 flex justify-between items-center text-slate-400 text-[9px] font-black uppercase tracking-[0.1em]">
+                        <div className="flex gap-4">
+                           <span className="flex items-center gap-1.5"><Phone size={12}/> {settings.contactPhone || '+৮৮ ০১৭১১-২২২৩৩৩'}</span>
+                           <span className="flex items-center gap-1.5"><Globe size={12}/> {settings.contactWebsite || 'www.yoursite.com'}</span>
                         </div>
-                        <div className="text-center space-y-3">
-                           <div className="p-4 bg-white border-2 border-slate-50 rounded-[2rem] shadow-xl inline-block transform hover:scale-105 transition-transform">
-                              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(selectedOrder.orderNumber)}`} alt="QR" className="w-20 h-20 opacity-90"/>
-                           </div>
-                           <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em]">Scan to Verify</p>
-                        </div>
+                        <div>Terms: No refund after 7 days of delivery.</div>
                      </div>
                   </div>
                </div>

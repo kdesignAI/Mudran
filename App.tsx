@@ -15,6 +15,7 @@ import BottomNavigation from './components/BottomNavigation';
 import Login from './components/Login';
 import { Tab, Order, Transaction, InventoryItem, EmployeeTransaction, Employee, Customer, Purchase, User, Role, AppSettings, Workspace } from './types';
 import { MOCK_ORDERS, MOCK_TRANSACTIONS, MOCK_EMPLOYEES, MOCK_INVENTORY, MOCK_CUSTOMERS } from './constants';
+import { ShieldAlert, Lock } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -24,7 +25,6 @@ const App: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<Tab>(Tab.DASHBOARD);
 
-  // Global Workspace Management (for Super Admin)
   const [workspaces, setWorkspaces] = useState<Workspace[]>(() => {
     const saved = localStorage.getItem('mudran_saas_workspaces');
     return saved ? JSON.parse(saved) : [];
@@ -32,7 +32,6 @@ const App: React.FC = () => {
   
   const currentWorkspace = workspaces.find(w => w.id === currentUser?.workspaceId);
 
-  // Scoped Data Persistence Helper
   const getScopedKey = (key: string) => `mudran_${currentUser?.workspaceId || 'default'}_${key}`;
 
   const defaultTemplates = [
@@ -48,11 +47,15 @@ const App: React.FC = () => {
       themeColor: "#0891b2",
       logoUrl: "",
       invoiceHeader: "Premium Printing & Branding Solutions",
-      whatsappTemplates: defaultTemplates
+      contactPhone: "+৮৮ ০১৭১১-২২২৩৩৩",
+      contactWebsite: "www.yoursite.com",
+      whatsappTemplates: defaultTemplates,
+      whatsappGroupLink: "https://chat.whatsapp.com/example",
+      facebookPageLink: "https://facebook.com/mudransahayogi",
+      telegramChannelLink: "https://t.me/mudransahayogi"
     };
   });
 
-  // Central State Management
   const [orders, setOrders] = useState<Order[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -61,7 +64,6 @@ const App: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [employeeTransactions, setEmployeeTransactions] = useState<EmployeeTransaction[]>([]);
 
-  // Load and Persist data
   useEffect(() => {
     if (currentUser) {
       const load = (key: string, mock: any) => {
@@ -85,7 +87,10 @@ const App: React.FC = () => {
       localStorage.setItem(getScopedKey('settings'), JSON.stringify(settings));
       localStorage.setItem(getScopedKey('employees'), JSON.stringify(employees));
     }
-  }, [orders, transactions, inventory, customers, settings, employees]);
+    if (currentUser?.role === Role.SUPER_ADMIN || !currentUser) {
+       localStorage.setItem(getScopedKey('settings'), JSON.stringify(settings));
+    }
+  }, [orders, transactions, inventory, customers, settings, employees, currentUser]);
 
   const handleLogout = () => { setCurrentUser(null); localStorage.removeItem('mudran_saas_user'); };
 
@@ -99,39 +104,68 @@ const App: React.FC = () => {
     setEmployeeTransactions(prev => [newEmpTx, ...prev]);
   };
 
-  if (!currentUser) return <Login onLogin={setCurrentUser} />;
+  if (!currentUser) return <Login onLogin={setCurrentUser} settings={settings} />;
+
+  const PermissionDenied = () => (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
+      <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mb-6 shadow-xl shadow-rose-100 animate-bounce">
+        <Lock size={40} />
+      </div>
+      <h3 className="text-2xl font-black text-slate-800 tracking-tight">অ্যাক্সেস সংরক্ষিত</h3>
+      <p className="text-slate-400 mt-2 max-w-xs font-bold leading-relaxed">দুঃখিত, আপনার রোল অনুযায়ী এই সেকশনটি দেখার অনুমতি নেই। অনুগ্রহ করে এডমিনের সাথে যোগাযোগ করুন।</p>
+      <button onClick={() => setActiveTab(Tab.DASHBOARD)} className="mt-8 px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg">ড্যাশবোর্ডে ফিরুন</button>
+    </div>
+  );
 
   const renderContent = () => {
+    const role = currentUser.role;
+
     switch (activeTab) {
-      case Tab.DASHBOARD: return <Dashboard orders={orders} transactions={transactions} inventory={inventory} setActiveTab={setActiveTab} />;
-      case Tab.ORDERS: return <OrderManager orders={orders} setOrders={setOrders} addTransaction={addTransaction} customers={customers} setCustomers={setCustomers} inventory={inventory} settings={settings} />;
-      case Tab.PRESS_JOBS: return <PressJobManager orders={orders} setOrders={setOrders} employees={employees} settings={settings} />;
-      case Tab.PURCHASES: return <PurchaseManager purchases={purchases} setPurchases={setPurchases} inventory={inventory} setInventory={setInventory} addTransaction={addTransaction} />;
-      case Tab.CUSTOMERS: return <CustomerManager customers={customers} setCustomers={setCustomers} orders={orders} settings={settings} />;
-      case Tab.INVENTORY: return <InventoryManager inventory={inventory} setInventory={setInventory} />;
-      case Tab.FINANCE: return <FinanceManager transactions={transactions} addTransaction={addTransaction} employees={employees} orders={orders} addEmployeeTransaction={addEmployeeTransaction} />;
-      case Tab.EMPLOYEES: return <EmployeeManager employees={employees} setEmployees={setEmployees} employeeTransactions={employeeTransactions} setEmployeeTransactions={setEmployeeTransactions} addTransaction={addTransaction} />;
-      case Tab.SETTINGS: return <SettingsManager settings={settings} setSettings={setSettings} data={{ orders, transactions, inventory, customers, employees, purchases }} setters={{ setOrders, setTransactions, setInventory, setCustomers, setEmployees, setPurchases }} />;
-      case Tab.SUPER_ADMIN_PANEL: return <SuperAdminPanel workspaces={workspaces} setWorkspaces={setWorkspaces} />;
-      default: return <Dashboard orders={orders} transactions={transactions} inventory={inventory} setActiveTab={setActiveTab} />;
+      case Tab.DASHBOARD: 
+        return (role === Role.ADMIN || role === Role.MANAGER) ? <Dashboard orders={orders} transactions={transactions} inventory={inventory} setActiveTab={setActiveTab} /> : <PermissionDenied />;
+      
+      case Tab.ORDERS: 
+        return <OrderManager orders={orders} setOrders={setOrders} addTransaction={addTransaction} customers={customers} setCustomers={setCustomers} inventory={inventory} settings={settings} />;
+      
+      case Tab.PRESS_JOBS: 
+        return (role === Role.ADMIN || role === Role.MANAGER) ? <PressJobManager orders={orders} setOrders={setOrders} employees={employees} settings={settings} /> : <PermissionDenied />;
+      
+      case Tab.PURCHASES: 
+        return (role === Role.ADMIN || role === Role.MANAGER) ? <PurchaseManager purchases={purchases} setPurchases={setPurchases} inventory={inventory} setInventory={setInventory} addTransaction={addTransaction} /> : <PermissionDenied />;
+      
+      case Tab.CUSTOMERS: 
+        return <CustomerManager customers={customers} setCustomers={setCustomers} orders={orders} settings={settings} />;
+      
+      case Tab.INVENTORY: 
+        return (role === Role.ADMIN || role === Role.MANAGER) ? <InventoryManager inventory={inventory} setInventory={setInventory} /> : <PermissionDenied />;
+      
+      case Tab.FINANCE: 
+        return (role === Role.ADMIN || role === Role.MANAGER) ? <FinanceManager transactions={transactions} addTransaction={addTransaction} employees={employees} orders={orders} addEmployeeTransaction={addEmployeeTransaction} /> : <PermissionDenied />;
+      
+      case Tab.EMPLOYEES: 
+        return (role === Role.ADMIN) ? <EmployeeManager employees={employees} setEmployees={setEmployees} employeeTransactions={employeeTransactions} setEmployeeTransactions={setEmployeeTransactions} addTransaction={addTransaction} /> : <PermissionDenied />;
+      
+      case Tab.SETTINGS: 
+        return (role === Role.ADMIN) ? <SettingsManager settings={settings} setSettings={setSettings} data={{ orders, transactions, inventory, customers, employees, purchases }} setters={{ setOrders, setTransactions, setInventory, setCustomers, setEmployees, setPurchases }} /> : <PermissionDenied />;
+      
+      case Tab.SUPER_ADMIN_PANEL: 
+        return (role === Role.SUPER_ADMIN) ? <SuperAdminPanel workspaces={workspaces} setWorkspaces={setWorkspaces} settings={settings} setSettings={setSettings} /> : <PermissionDenied />;
+      
+      default: 
+        return <Dashboard orders={orders} transactions={transactions} inventory={inventory} setActiveTab={setActiveTab} />;
     }
   };
 
   return (
     <div className="flex min-h-screen bg-slate-50 overflow-x-hidden safe-top">
-      {/* Desktop Sidebar */}
       <div className="hidden lg:block">
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} user={currentUser} onLogout={handleLogout} settings={settings} workspace={currentWorkspace} />
       </div>
-      
-      {/* Main Container */}
       <main className="flex-1 overflow-y-auto max-h-screen pb-24 lg:pb-0 scroll-smooth">
         <div className="max-w-[1600px] mx-auto">
           {renderContent()}
         </div>
       </main>
-
-      {/* Mobile Bottom Navigation */}
       <div className="lg:hidden">
         <BottomNavigation activeTab={activeTab} setActiveTab={setActiveTab} user={currentUser} workspace={currentWorkspace} />
       </div>

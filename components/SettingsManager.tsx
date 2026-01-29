@@ -1,7 +1,7 @@
 
 import React, { useRef, useState } from 'react';
 import { AppSettings, WhatsAppTemplate, Order, Transaction, InventoryItem, Customer, Employee, Purchase } from '../types';
-import { Settings, Save, RefreshCcw, Palette, Type, Layout, Image as ImageIcon, FileText, MessageCircle, Plus, Trash2, Edit2, CloudDownload, CloudUpload, FileSpreadsheet, Database, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Settings, Save, RefreshCcw, Palette, Type, Layout, Image as ImageIcon, FileText, MessageCircle, Plus, Trash2, Edit2, CloudDownload, CloudUpload, FileSpreadsheet, Database, ShieldCheck, AlertCircle, Phone, Globe } from 'lucide-react';
 import { exportToCSV } from '../utils/csvExport';
 
 interface SettingsManagerProps {
@@ -88,6 +88,8 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, setSettings
         themeColor: "#0891b2",
         logoUrl: "",
         invoiceHeader: "Premium Printing & Branding Solutions",
+        contactPhone: "+৮৮ ০১৭১১-২২২৩৩৩",
+        contactWebsite: "www.yoursite.com",
         whatsappTemplates: [
           { id: 't1', title: "ঈদ মোবারক অফার", text: "আসসালামু আলাইকুম, ঈদ উপলক্ষে আমাদের সকল প্রিন্টিং সার্ভিসে ১০% ডিসকাউন্ট চলছে। আজই আপনার অর্ডার কনফার্ম করুন! - মুদ্রণ সহযোগী।" },
           { id: 't2', title: "নতুন গ্রাহক অফার", text: "মুদ্রণ সহযোগীর নতুন গ্রাহক হিসেবে আপনার প্রথম অর্ডারে পাচ্ছেন ৫% বিশেষ ছাড়। আমাদের সেবা পরখ করে দেখুন। ধন্যবাদ।" },
@@ -164,7 +166,6 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, setSettings
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6">
-        {/* Branding Info - Compacter Grid */}
         <div className="lg:col-span-7 bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-5">
           <div className="flex items-center justify-between border-b border-slate-50 pb-3">
             <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
@@ -240,10 +241,31 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, setSettings
                 onChange={handleChange}
               />
             </div>
+
+            <div className="md:col-span-1">
+              <label className={labelClass}><Phone size={14} /> যোগাযোগের ফোন (Invoice Footer)</label>
+              <input 
+                name="contactPhone"
+                className={inputClass} 
+                value={settings.contactPhone} 
+                onChange={handleChange}
+                placeholder="+৮৮ ০১৭১১-২২২৩৩৩"
+              />
+            </div>
+
+            <div className="md:col-span-1">
+              <label className={labelClass}><Globe size={14} /> ওয়েবসাইট/ইমেইল (Invoice Footer)</label>
+              <input 
+                name="contactWebsite"
+                className={inputClass} 
+                value={settings.contactWebsite} 
+                onChange={handleChange}
+                placeholder="www.yoursite.com"
+              />
+            </div>
           </div>
         </div>
 
-        {/* WhatsApp Templates - Compact Side List */}
         <div className="lg:col-span-5 bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-5 flex flex-col">
           <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest border-b border-slate-50 pb-3 flex items-center gap-2">
             <MessageCircle className="text-green-500" size={16} /> WhatsApp টেমপ্লেট
@@ -290,7 +312,6 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ settings, setSettings
         </div>
       </div>
 
-      {/* Data Backup - Smart Horizontal Grid */}
       <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-5">
          <div className="flex justify-between items-center border-b border-slate-50 pb-3">
             <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
