@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="bn">
   <head>
@@ -29,9 +28,50 @@
       .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
       
       @media print {
-        .no-print { display: none !important; }
-        .print-area { width: 100% !important; margin: 0 !important; padding: 0 !important; }
-        body { background-color: white !important; }
+        /* Professional Visibility Strategy */
+        body * {
+          visibility: hidden !important;
+        }
+        
+        /* Keep only the print-area and its children visible */
+        .print-area, .print-area * {
+          visibility: visible !important;
+        }
+
+        /* Position the invoice at the very top of the page */
+        .print-area {
+          position: absolute !important;
+          left: 0 !important;
+          top: 0 !important;
+          width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          display: block !important;
+          background: white !important;
+          box-shadow: none !important;
+          border: none !important;
+        }
+
+        /* Remove fixed modal positioning and dark backgrounds during print */
+        .print-invoice-modal {
+          position: absolute !important;
+          background: transparent !important;
+          backdrop-filter: none !important;
+          box-shadow: none !important;
+          inset: 0 !important;
+          display: block !important;
+        }
+
+        /* Ensure standard browser elements are hidden */
+        .no-print {
+          display: none !important;
+          visibility: hidden !important;
+        }
+
+        @page {
+          margin: 1cm;
+          size: auto;
+        }
       }
       
       /* Hide scrollbar for PWA feel */

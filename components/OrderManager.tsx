@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Order, OrderItem, OrderStatus, Customer, InventoryItem, AppSettings, WhatsAppLog } from '../types';
 import { Plus, Trash2, Printer, Search, X, Phone, MapPin, Tag, Zap, Send, PlusCircle, Layers, CopyCheck, Percent, FileText, Link as LinkIcon, AlertCircle, ChevronDown, Globe, MessageCircle } from 'lucide-react';
@@ -443,8 +442,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
        </div>
 
        {selectedOrder && (
-         <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-0 sm:p-4 backdrop-blur-md">
-            <div className="bg-white w-full h-full sm:h-auto sm:max-w-3xl sm:rounded-[1.5rem] shadow-2xl relative flex flex-col overflow-hidden animate-in zoom-in duration-300">
+         <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-0 sm:p-4 backdrop-blur-md print-invoice-modal">
+            <div className="bg-white w-full h-full sm:h-auto sm:max-w-3xl sm:rounded-[1.5rem] shadow-2xl relative flex flex-col overflow-hidden animate-in zoom-in duration-300 print-area">
                <div className="p-4 border-b border-slate-50 flex justify-between items-center bg-white shrink-0 safe-top no-print">
                   <span className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Globe size={14}/> International Invoice Standard</span>
                   <div className="flex gap-2">
@@ -455,7 +454,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
                   </div>
                </div>
                
-               <div className="flex-1 p-6 sm:p-8 bg-white overflow-y-auto print-area safe-bottom scrollbar-thin">
+               <div className="flex-1 p-6 sm:p-8 bg-white overflow-y-auto safe-bottom scrollbar-thin">
                   <div className="space-y-6">
                      <div className="flex justify-between items-start border-b-2 border-slate-900 pb-5">
                         <div className="flex gap-3 items-center">
@@ -474,7 +473,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
                      </div>
 
                      <div className="grid grid-cols-2 gap-8 py-2">
-                        <div className="space-y-1">
+                        <div className="space-y-1 text-left">
                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] mb-1">Customer Details</p>
                            <h4 className="font-black text-slate-800 text-base leading-tight">{selectedOrder.customer.name}</h4>
                            <p className="text-xs font-bold text-slate-600 flex items-center gap-1.5"><Phone size={12} className="text-slate-400"/> {selectedOrder.customer.phone}</p>
@@ -519,7 +518,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
                      </div>
 
                      <div className="flex flex-col sm:flex-row justify-between items-start gap-6">
-                        <div className="flex-1 w-full sm:max-w-[45%]">
+                        <div className="flex-1 w-full sm:max-w-[45%] text-left">
                            {selectedOrder.orderNote && (
                               <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl">
                                  <h5 className="text-[9px] font-black text-slate-400 uppercase mb-1.5 flex items-center gap-1.5"><FileText size={12}/> Notes & Instructions:</h5>
@@ -570,7 +569,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, setOrders, addTrans
                            <span className="flex items-center gap-1.5"><Phone size={12}/> {settings.contactPhone || '+৮৮ ০১৭১১-২২২৩৩৩'}</span>
                            <span className="flex items-center gap-1.5"><Globe size={12}/> {settings.contactWebsite || 'www.yoursite.com'}</span>
                         </div>
-                        <div>Terms: No refund after 7 days of delivery.</div>
+                        <div className="text-right">Terms: No refund after 7 days of delivery.</div>
                      </div>
                   </div>
                </div>
