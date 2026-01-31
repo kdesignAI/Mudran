@@ -13,9 +13,9 @@ import SuperAdminPanel from './components/SuperAdminPanel';
 import PressJobManager from './components/PressJobManager';
 import BottomNavigation from './components/BottomNavigation';
 import Login from './components/Login';
-import { Tab, Order, Transaction, InventoryItem, EmployeeTransaction, Employee, Customer, Purchase, User, Role, AppSettings, Workspace } from './types';
-import { MOCK_ORDERS, MOCK_TRANSACTIONS, MOCK_EMPLOYEES, MOCK_INVENTORY, MOCK_CUSTOMERS } from './constants';
-import { ShieldAlert, Lock } from 'lucide-react';
+import { Tab, Order, Transaction, InventoryItem, Customer, Employee, Purchase, User, Role, AppSettings, Workspace, EmployeeTransaction } from './types';
+
+const API_URL = './api.php';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -24,137 +24,165 @@ const App: React.FC = () => {
   });
 
   const [activeTab, setActiveTab] = useState<Tab>(Tab.DASHBOARD);
+  const [loading, setLoading] = useState(false);
 
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(() => {
-    const saved = localStorage.getItem('mudran_saas_workspaces');
-    return saved ? JSON.parse(saved) : [];
-  });
-  
-  const currentWorkspace = workspaces.find(w => w.id === currentUser?.workspaceId);
-
-  const getScopedKey = (key: string) => `mudran_${currentUser?.workspaceId || 'default'}_${key}`;
-
-  const defaultTemplates = [
-    { id: 't1', title: "ঈদ মোবারক অফার", text: "আসসালামু আলাইকুম, ঈদ উপলক্ষে আমাদের সকল প্রিন্টিং সার্ভিসে ১০% ডিসকাউন্ট চলছে। আজই আপনার অর্ডার কনফার্ম করুন! - মুদ্রণ সহযোগী।" },
-    { id: 't2', title: "নতুন গ্রাহক অফার", text: "মুদ্রণ সহযোগীর নতুন গ্রাহক হিসেবে আপনার প্রথম অর্ডারে পাচ্ছেন ৫% বিশেষ ছাড়। আমাদের সেবা পরখ করে দেখুন। ধন্যবাদ।" }
-  ];
-
-  const [settings, setSettings] = useState<AppSettings>(() => {
-    const saved = localStorage.getItem(getScopedKey('settings'));
-    return saved ? JSON.parse(saved) : {
-      softwareName: "মুদ্রণ সহযোগী",
-      logoText: "M",
-      themeColor: "#0891b2",
-      logoUrl: "",
-      invoiceHeader: "Premium Printing & Branding Solutions",
-      contactPhone: "+৮৮ ০১৭১১-২২২৩৩৩",
-      contactWebsite: "www.yoursite.com",
-      whatsappTemplates: defaultTemplates,
-      whatsappGroupLink: "https://chat.whatsapp.com/example",
-      facebookPageLink: "https://facebook.com/mudransahayogi",
-      telegramChannelLink: "https://t.me/mudransahayogi"
-    };
+  const [settings, setSettings] = useState<AppSettings>({
+    softwareName: "মুদ্রণ সহযোগী",
+    logoText: "M",
+    themeColor: "#0891b2",
+    logoUrl: "",
+    invoiceHeader: "Premium Printing & Branding Solutions",
+    contactPhone: "+৮৮ ০১৭১১-২২২৩৩৩",
+    contactWebsite: "www.yoursite.com"
   });
 
   const [orders, setOrders] = useState<Order[]>([]);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [employeeTransactions, setEmployeeTransactions] = useState<EmployeeTransaction[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+
+  const refreshAllData = async () => {
+    if (!currentUser) return;
+    setLoading(true);
+    try {
+      if (currentUser.role !== Role.SUPER_ADMIN) {
+        const response = await fetch(`${API_URL}?action=get_all_data&workspace_id=${currentUser.workspaceId}`);
+        if (!response.ok) throw new Error(`Fetch Error: ${response.status}`);
+        const data = await response.json();
+        
+        if (data && !data.error) {
+          if (data.settings) setSettings(data.settings);
+          if (data.orders) setOrders(data.orders);
+          if (data.transactions) setTransactions(data.transactions);
+          if (data.inventory) setInventory(data.inventory);
+          if (data.customers) setCustomers(data.customers);
+          if (data.employees) setEmployees(data.employees);
+          if (data.purchases) setPurchases(data.purchases);
+        } else if (data && data.error) {
+          console.error("API returned error:", data.error);
+        }
+      } else {
+        const response = await fetch(`${API_URL}?action=get_workspaces`);
+        if (!response.ok) throw new Error(`Fetch Workspaces Error: ${response.status}`);
+        const data = await response.json();
+        if (Array.isArray(data)) setWorkspaces(data);
+      }
+    } catch (err) {
+      console.error("Data refresh failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (currentUser) {
-      const load = (key: string, mock: any) => {
-        const saved = localStorage.getItem(getScopedKey(key));
-        return saved ? JSON.parse(saved) : mock;
-      };
-      setOrders(load('orders', MOCK_ORDERS));
-      setTransactions(load('transactions', MOCK_TRANSACTIONS));
-      setInventory(load('inventory', MOCK_INVENTORY));
-      setCustomers(load('customers', MOCK_CUSTOMERS));
-      setEmployees(load('employees', MOCK_EMPLOYEES));
+      refreshAllData();
+      // Role-based protection: Redirect unauthorized users from Super Admin Panel
+      if (currentUser.role !== Role.SUPER_ADMIN && activeTab === Tab.SUPER_ADMIN_PANEL) {
+        setActiveTab(Tab.DASHBOARD);
+      }
     }
   }, [currentUser]);
 
-  useEffect(() => {
-    if (currentUser && currentUser.role !== Role.SUPER_ADMIN) {
-      localStorage.setItem(getScopedKey('orders'), JSON.stringify(orders));
-      localStorage.setItem(getScopedKey('transactions'), JSON.stringify(transactions));
-      localStorage.setItem(getScopedKey('inventory'), JSON.stringify(inventory));
-      localStorage.setItem(getScopedKey('customers'), JSON.stringify(customers));
-      localStorage.setItem(getScopedKey('settings'), JSON.stringify(settings));
-      localStorage.setItem(getScopedKey('employees'), JSON.stringify(employees));
+  const apiSave = async (action: string, data: any) => {
+    if (!currentUser) return false;
+    try {
+      const response = await fetch(`${API_URL}?action=${action}&workspace_id=${currentUser.workspaceId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const result = await response.json();
+      if (result.status === 'success') {
+        await refreshAllData(); // Force fetch fresh data from DB
+        return true;
+      } else {
+        console.error("Save failed:", result.error);
+        alert(`সেভ করতে ব্যর্থ হয়েছে: ${result.error}`);
+        return false;
+      }
+    } catch (err) {
+      console.error("Network error:", err);
+      alert("সার্ভারের সাথে সংযোগ বিচ্ছিন্ন। পুনরায় চেষ্টা করুন।");
+      return false;
     }
-    if (currentUser?.role === Role.SUPER_ADMIN || !currentUser) {
-       localStorage.setItem(getScopedKey('settings'), JSON.stringify(settings));
-    }
-  }, [orders, transactions, inventory, customers, settings, employees, currentUser]);
-
-  const handleLogout = () => { setCurrentUser(null); localStorage.removeItem('mudran_saas_user'); };
-
-  const addTransaction = (type: 'INCOME' | 'EXPENSE', amount: number, category: string, description: string, relatedOrderId?: string) => {
-    const newTx: Transaction = { id: Date.now().toString(), date: new Date().toISOString(), type, amount, category, description, relatedOrderId };
-    setTransactions(prev => [newTx, ...prev]);
   };
 
-  const addEmployeeTransaction = (employeeId: string, type: 'SALARY_PAYMENT' | 'ADVANCE' | 'BONUS', amount: number, note: string) => {
-    const newEmpTx: EmployeeTransaction = { id: Date.now().toString(), employeeId, date: new Date().toISOString(), type, amount, note };
-    setEmployeeTransactions(prev => [newEmpTx, ...prev]);
+  const addTransaction = async (type: 'INCOME' | 'EXPENSE', amount: number, category: string, description: string, relatedOrderId?: string, employeeId?: string) => {
+    if (!currentUser) return;
+    const newTx: Transaction = {
+      id: Date.now().toString(),
+      date: new Date().toISOString(),
+      type,
+      amount,
+      category,
+      description,
+      relatedOrderId,
+      employeeId
+    };
+    await apiSave('save_transaction', newTx);
   };
 
-  if (!currentUser) return <Login onLogin={setCurrentUser} settings={settings} />;
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('mudran_saas_user');
+  };
 
-  const PermissionDenied = () => (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-      <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mb-6 shadow-xl shadow-rose-100 animate-bounce">
-        <Lock size={40} />
-      </div>
-      <h3 className="text-2xl font-black text-slate-800 tracking-tight">অ্যাক্সেস সংরক্ষিত</h3>
-      <p className="text-slate-400 mt-2 max-w-xs font-bold leading-relaxed">দুঃখিত, আপনার রোল অনুযায়ী এই সেকশনটি দেখার অনুমতি নেই। অনুগ্রহ করে এডমিনের সাথে যোগাযোগ করুন।</p>
-      <button onClick={() => setActiveTab(Tab.DASHBOARD)} className="mt-8 px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg">ড্যাশবোর্ডে ফিরুন</button>
-    </div>
-  );
+  const onLoginSuccess = (user: User) => {
+    setCurrentUser(user);
+    localStorage.setItem('mudran_saas_user', JSON.stringify(user));
+  };
+
+  if (!currentUser) return <Login onLogin={onLoginSuccess} settings={settings} />;
 
   const renderContent = () => {
     const role = currentUser.role;
+    if (loading && orders.length === 0) return (
+      <div className="p-20 flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="font-black text-cyan-600 animate-pulse text-sm uppercase tracking-widest">ডাটা লোড হচ্ছে...</p>
+      </div>
+    );
 
     switch (activeTab) {
       case Tab.DASHBOARD: 
-        return (role === Role.ADMIN || role === Role.MANAGER) ? <Dashboard orders={orders} transactions={transactions} inventory={inventory} setActiveTab={setActiveTab} /> : <PermissionDenied />;
-      
+        return <Dashboard orders={orders} transactions={transactions} inventory={inventory} setActiveTab={setActiveTab} />;
       case Tab.ORDERS: 
-        return <OrderManager orders={orders} setOrders={setOrders} addTransaction={addTransaction} customers={customers} setCustomers={setCustomers} inventory={inventory} settings={settings} />;
-      
-      case Tab.PRESS_JOBS: 
-        return (role === Role.ADMIN || role === Role.MANAGER) ? <PressJobManager orders={orders} setOrders={setOrders} employees={employees} settings={settings} /> : <PermissionDenied />;
-      
-      case Tab.PURCHASES: 
-        return (role === Role.ADMIN || role === Role.MANAGER) ? <PurchaseManager purchases={purchases} setPurchases={setPurchases} inventory={inventory} setInventory={setInventory} addTransaction={addTransaction} /> : <PermissionDenied />;
-      
-      case Tab.CUSTOMERS: 
-        return <CustomerManager customers={customers} setCustomers={setCustomers} orders={orders} settings={settings} />;
-      
-      case Tab.INVENTORY: 
-        return (role === Role.ADMIN || role === Role.MANAGER) ? <InventoryManager inventory={inventory} setInventory={setInventory} /> : <PermissionDenied />;
-      
-      case Tab.FINANCE: 
-        return (role === Role.ADMIN || role === Role.MANAGER) ? <FinanceManager transactions={transactions} addTransaction={addTransaction} employees={employees} orders={orders} addEmployeeTransaction={addEmployeeTransaction} /> : <PermissionDenied />;
-      
-      case Tab.EMPLOYEES: 
-        return (role === Role.ADMIN) ? <EmployeeManager employees={employees} setEmployees={setEmployees} employeeTransactions={employeeTransactions} setEmployeeTransactions={setEmployeeTransactions} addTransaction={addTransaction} /> : <PermissionDenied />;
-      
-      case Tab.SETTINGS: 
-        return (role === Role.ADMIN) ? <SettingsManager settings={settings} setSettings={setSettings} data={{ orders, transactions, inventory, customers, employees, purchases }} setters={{ setOrders, setTransactions, setInventory, setCustomers, setEmployees, setPurchases }} /> : <PermissionDenied />;
-      
+        return <OrderManager orders={orders} setOrders={setOrders} onSaveOrder={(o) => apiSave('save_order', o)} addTransaction={addTransaction} customers={customers} setCustomers={setCustomers} inventory={inventory} settings={settings} />;
+      case Tab.PRESS_JOBS:
+        return <PressJobManager orders={orders} setOrders={setOrders} employees={employees} settings={settings} />;
+      case Tab.CUSTOMERS:
+        return <CustomerManager customers={customers} setCustomers={setCustomers} orders={orders} settings={settings} onSaveCustomer={(c) => apiSave('save_customer', c)} />;
+      case Tab.FINANCE:
+        return <FinanceManager transactions={transactions} addTransaction={addTransaction} employees={employees} orders={orders} addEmployeeTransaction={()=>{}} />;
+      case Tab.INVENTORY:
+        return <InventoryManager inventory={inventory} setInventory={setInventory} onSaveInventory={(i) => apiSave('save_inventory', i)} />;
+      case Tab.PURCHASES:
+        return <PurchaseManager purchases={purchases} setPurchases={setPurchases} inventory={inventory} setInventory={setInventory} addTransaction={addTransaction} onSavePurchase={(p) => apiSave('save_purchase', p)} />;
+      case Tab.EMPLOYEES:
+        return (
+          <EmployeeManager 
+            employees={employees} 
+            setEmployees={setEmployees} 
+            employeeTransactions={transactions.filter(t => !!t.employeeId) as any} 
+            setEmployeeTransactions={()=>{}} 
+            addTransaction={addTransaction} 
+            onSaveEmployee={(e) => apiSave('save_employee', e)} 
+          />
+        );
+      case Tab.SETTINGS:
+        return <SettingsManager settings={settings} setSettings={(s) => { setSettings(s); apiSave('save_settings', s); }} data={{ orders, transactions, inventory, customers, employees, purchases }} setters={{ setOrders, setTransactions, setInventory, setCustomers, setEmployees, setPurchases }} />;
       case Tab.SUPER_ADMIN_PANEL: 
-        return (role === Role.SUPER_ADMIN) ? <SuperAdminPanel workspaces={workspaces} setWorkspaces={setWorkspaces} settings={settings} setSettings={setSettings} /> : <PermissionDenied />;
-      
+        return (role === Role.SUPER_ADMIN) ? <SuperAdminPanel workspaces={workspaces} setWorkspaces={setWorkspaces} settings={settings} setSettings={setSettings} /> : <div className="p-20 text-center text-red-500 font-bold uppercase tracking-widest bg-red-50 rounded-[3rem] m-6">Unauthorized: এই সেকশনে প্রবেশের অনুমতি নেই।</div>;
       default: 
         return <Dashboard orders={orders} transactions={transactions} inventory={inventory} setActiveTab={setActiveTab} />;
     }
   };
+
+  const currentWorkspace = workspaces.find(w => w.id === currentUser.workspaceId);
 
   return (
     <div className="flex min-h-screen bg-slate-50 overflow-x-hidden safe-top">

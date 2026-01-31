@@ -10,10 +10,13 @@ interface PurchaseManagerProps {
   setPurchases: React.Dispatch<React.SetStateAction<Purchase[]>>;
   inventory: InventoryItem[];
   setInventory: React.Dispatch<React.SetStateAction<InventoryItem[]>>;
-  addTransaction: (type: 'INCOME' | 'EXPENSE', amount: number, category: string, description: string) => void;
+  // Fixed: Updated addTransaction signature to match App.tsx
+  addTransaction: (type: 'INCOME' | 'EXPENSE', amount: number, category: string, description: string, relatedOrderId?: string) => void;
+  // Added onSavePurchase prop for persistence
+  onSavePurchase?: (purchase: Purchase) => Promise<boolean>;
 }
 
-const PurchaseManager: React.FC<PurchaseManagerProps> = ({ purchases, setPurchases, inventory, setInventory, addTransaction }) => {
+const PurchaseManager: React.FC<PurchaseManagerProps> = ({ purchases, setPurchases, inventory, setInventory, addTransaction, onSavePurchase }) => {
   const [view, setView] = useState<'LIST' | 'CREATE'>('LIST');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -67,7 +70,8 @@ const PurchaseManager: React.FC<PurchaseManagerProps> = ({ purchases, setPurchas
     setItemUnitPrice(0);
   };
 
-  const handleCreatePurchase = () => {
+  // Fixed: Updated handleCreatePurchase to support optional onSavePurchase prop
+  const handleCreatePurchase = async () => {
     if (!supplierName || currentItems.length === 0) {
       alert("সাপ্লায়ার নাম এবং অন্তত একটি আইটেম যুক্ত করুন");
       return;
@@ -122,8 +126,12 @@ const PurchaseManager: React.FC<PurchaseManagerProps> = ({ purchases, setPurchas
       dueDate: dueDate || undefined
     };
 
-    setPurchases([newPurchase, ...purchases]);
-    setInventory(updatedInventory);
+    if (onSavePurchase) {
+      await onSavePurchase(newPurchase);
+    } else {
+      setPurchases([newPurchase, ...purchases]);
+      setInventory(updatedInventory);
+    }
 
     if (paidAmount > 0) {
       addTransaction('EXPENSE', paidAmount, 'Raw Materials', `${supplierName} থেকে ক্রয় (Inv: ${newPurchase.purchaseNumber})`);
@@ -428,7 +436,7 @@ const PurchaseManager: React.FC<PurchaseManagerProps> = ({ purchases, setPurchas
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredPurchases.map((purchase) => {
+              {smartSearch(purchases, searchTerm, ['purchaseNumber', 'supplierName']).map((purchase) => {
                 const overdue = isOverdue(purchase);
                 return (
                   <tr key={purchase.id} className={`hover:bg-slate-50 transition-all group ${overdue ? 'bg-rose-50/20' : ''}`}>
@@ -476,7 +484,7 @@ const PurchaseManager: React.FC<PurchaseManagerProps> = ({ purchases, setPurchas
                   </tr>
                 );
               })}
-              {filteredPurchases.length === 0 && (
+              {smartSearch(purchases, searchTerm, ['purchaseNumber', 'supplierName']).length === 0 && (
                 <tr><td colSpan={4} className="px-8 py-20 text-center text-slate-400 font-medium italic">কোন ক্রয়ের তথ্য পাওয়া যায়নি</td></tr>
               )}
             </tbody>

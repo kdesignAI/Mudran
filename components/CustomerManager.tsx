@@ -10,9 +10,11 @@ interface CustomerManagerProps {
   setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
   orders: Order[];
   settings: AppSettings;
+  // Added onSaveCustomer prop for persistence
+  onSaveCustomer?: (customer: Customer) => Promise<boolean>;
 }
 
-const CustomerManager: React.FC<CustomerManagerProps> = ({ customers, setCustomers, orders, settings }) => {
+const CustomerManager: React.FC<CustomerManagerProps> = ({ customers, setCustomers, orders, settings, onSaveCustomer }) => {
   const [showModal, setShowModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
@@ -57,9 +59,11 @@ const CustomerManager: React.FC<CustomerManagerProps> = ({ customers, setCustome
     setOfferText('');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Fixed: Updated handleSubmit to support optional onSaveCustomer prop
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const customerData = {
+    const customerData: Customer = {
+      id: editingId || Date.now().toString(),
       name,
       phone,
       address,
@@ -67,10 +71,14 @@ const CustomerManager: React.FC<CustomerManagerProps> = ({ customers, setCustome
       defaultDiscountValue: Number(discValue)
     };
 
-    if (editingId) {
-      setCustomers(customers.map(c => c.id === editingId ? { ...c, ...customerData } : c));
+    if (onSaveCustomer) {
+      await onSaveCustomer(customerData);
     } else {
-      setCustomers([{ id: Date.now().toString(), ...customerData }, ...customers]);
+      if (editingId) {
+        setCustomers(customers.map(c => c.id === editingId ? customerData : c));
+      } else {
+        setCustomers([customerData, ...customers]);
+      }
     }
     resetForm();
   };

@@ -1,7 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Role, User, Workspace, WorkspaceStatus, AppSettings } from '../types';
-import { ShieldAlert, AlertCircle, MessageCircle, Facebook, Send, X } from 'lucide-react';
+import { ShieldAlert, AlertCircle, MessageCircle, Facebook, Send, X, Lock, Key, Loader2 } from 'lucide-react';
+
+// Explicitly use current directory for API
+const API_URL = './api.php';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -12,74 +15,124 @@ const Login: React.FC<LoginProps> = ({ onLogin, settings }) => {
   const [view, setView] = useState<'LOGIN' | 'CREATE_WORKSPACE' | 'SUPER_ADMIN'>('LOGIN');
   const [workspaceName, setWorkspaceName] = useState('');
   const [userName, setUserName] = useState('');
+  const [password, setPassword] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
   const [role, setRole] = useState<Role>(Role.ADMIN);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(() => {
-    const saved = localStorage.getItem('mudran_saas_workspaces');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
 
-  const handleCreateWorkspace = (e: React.FormEvent) => {
+  const fetchWorkspaces = async () => {
+    try {
+      const response = await fetch(`${API_URL}?action=get_workspaces`);
+      if (!response.ok) {
+        // Log the exact URL that failed to help debugging 404s
+        console.error(`API Request failed: ${response.url} - Status: ${response.status}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setWorkspaces(data);
+        return data;
+      }
+    } catch (err) {
+      console.error("Error fetching workspaces:", err);
+    }
+    return [];
+  };
+
+  useEffect(() => {
+    fetchWorkspaces();
+  }, []);
+
+  const SYSTEM_SUPER_PASS = "admin77";
+
+  const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!workspaceName.trim() || !userName.trim() || !mobileNumber.trim()) return;
+    setLoading(true);
+    setErrorMessage(null);
 
     const expiry = new Date();
     expiry.setDate(expiry.getDate() + 7);
 
-    const newWorkspace: Workspace = {
+    const newWorkspace = {
       id: Math.random().toString(36).substr(2, 9),
       name: workspaceName,
       ownerName: userName,
       ownerPhone: mobileNumber,
-      createdAt: new Date().toISOString(),
       status: WorkspaceStatus.ACTIVE,
       subscriptionType: 'TRIAL',
-      expiryDate: expiry.toISOString(),
-      hasPressPrinting: true
+      expiryDate: expiry.toISOString()
     };
 
-    const updated = [...workspaces, newWorkspace];
-    localStorage.setItem('mudran_saas_workspaces', JSON.stringify(updated));
-    setWorkspaces(updated);
-
-    setErrorMessage("অভিনন্দন! আপনার ৭ দিনের ফ্রি ট্রায়াল চালু হয়েছে। লগইন করুন।");
-    setView('LOGIN');
-    setUserName(mobileNumber);
-    setWorkspaceName('');
-    setMobileNumber('');
+    try {
+      const response = await fetch(`${API_URL}?action=create_workspace`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newWorkspace)
+      });
+      
+      const result = await response.json();
+      
+      if (result.status === 'success') {
+        setErrorMessage("অভিনন্দন! আপনার ৭ দিনের ফ্রি ট্রায়াল চালু হয়েছে। এখন ইউজারনেম দিয়ে লগইন করুন।");
+        setView('LOGIN');
+        setUserName(mobileNumber); 
+        await fetchWorkspaces(); 
+      } else {
+        setErrorMessage(result.error || "রেজিস্ট্রেশন ব্যর্থ হয়েছে।");
+      }
+    } catch (err) {
+      setErrorMessage("সার্ভারের সাথে সংযোগ বিচ্ছিন্ন। api.php ফাইলটি পাওয়া যাচ্ছে না।");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!userName.trim()) return;
-
     if (view === 'SUPER_ADMIN') {
-      onLogin({
-        id: 'super-admin-id',
-        name: 'System Super Admin',
-        role: Role.SUPER_ADMIN,
-        workspaceId: 'system-root'
-      });
+      if (password === SYSTEM_SUPER_PASS) {
+        onLogin({
+          id: 'super-admin-id',
+          name: 'System Super Admin',
+          role: Role.SUPER_ADMIN,
+          workspaceId: 'system-root'
+        });
+      } else {
+        setErrorMessage("ভুল মাস্টার পাসওয়ার্ড! পুনরায় চেষ্টা করুন।");
+      }
       return;
     }
 
-    const myWorkspace = workspaces.find(w => 
-      w.ownerName === userName || 
-      w.name === userName || 
-      w.ownerPhone === userName
+    if (!userName.trim()) return;
+
+    let currentWorkspaces = workspaces;
+    if (workspaces.length === 0) {
+      setLoading(true);
+      currentWorkspaces = await fetchWorkspaces();
+      setLoading(false);
+    }
+
+    const searchVal = userName.trim().toLowerCase();
+    const myWorkspace = currentWorkspaces.find(w => 
+      (w.ownerName && w.ownerName.toLowerCase() === searchVal) || 
+      (w.name && w.name.toLowerCase() === searchVal) || 
+      (w.ownerPhone && w.ownerPhone === searchVal) ||
+      (w.ownerPhone && w.ownerPhone === userName.trim())
     );
     
     if (!myWorkspace) {
-      setErrorMessage("দুঃখিত, কোনো ওয়ার্কস্পেস পাওয়া যায়নি।");
+      setErrorMessage("দুঃখিত, কোনো ওয়ার্কস্পেস পাওয়া যায়নি। সঠিক তথ্য দিন অথবা নতুন একাউন্ট তৈরি করুন।");
       return;
     }
 
     if (myWorkspace.status === WorkspaceStatus.SUSPENDED) {
-      setErrorMessage("অ্যাকাউন্টটি স্থগিত করা হয়েছে।");
+      setErrorMessage("আপনার একাউন্টটি বর্তমানে স্থগিত (Suspended) আছে।");
       return;
     }
 
@@ -96,38 +149,37 @@ const Login: React.FC<LoginProps> = ({ onLogin, settings }) => {
     });
   };
 
-  // Compact styles for smarter look
-  const inputStyle = "w-full p-3 rounded-2xl bg-white shadow-sm border border-slate-100 outline-none focus:ring-2 focus:ring-cyan-500/20 text-slate-700 placeholder:text-slate-400 text-sm font-medium transition-all";
-  const cardStyle = "w-full max-w-[350px] bg-white rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] p-8 sm:p-10 animate-in fade-in zoom-in duration-500";
-
-  const socialLinks = [
-    { icon: MessageCircle, color: 'text-emerald-500', link: settings.whatsappGroupLink, label: 'WhatsApp' },
-    { icon: Facebook, color: 'text-blue-600', link: settings.facebookPageLink, label: 'Facebook' },
-    { icon: Send, color: 'text-sky-500', link: settings.telegramChannelLink, label: 'Telegram' }
-  ];
+  const inputStyle = "w-full p-3.5 rounded-2xl bg-white shadow-sm border border-slate-100 outline-none focus:ring-4 focus:ring-cyan-500/10 text-slate-700 placeholder:text-slate-400 text-sm font-medium transition-all";
+  const cardStyle = "w-full max-w-[380px] bg-white rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] p-8 sm:p-12 animate-in fade-in zoom-in duration-500 relative overflow-hidden";
 
   return (
-    <div className="min-h-screen bg-[#f1f3f5] flex items-center justify-center p-6 font-['Hind_Siliguri']">
+    <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6 font-['Hind_Siliguri']">
       <button 
-        onClick={() => setView('SUPER_ADMIN')}
-        className="fixed top-6 right-6 text-slate-300 hover:text-slate-400 transition-colors p-2"
+        onClick={() => { setView(view === 'SUPER_ADMIN' ? 'LOGIN' : 'SUPER_ADMIN'); setErrorMessage(null); }}
+        className="fixed top-8 right-8 text-slate-200 hover:text-slate-400 transition-all p-3 rounded-full hover:bg-white hover:shadow-sm"
         title="Admin Access"
       >
-        <ShieldAlert size={16} />
+        <ShieldAlert size={20} />
       </button>
 
       <div className={cardStyle}>
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-black text-cyan-600 tracking-tight leading-none">
-            {view === 'LOGIN' ? 'Sign In' : view === 'CREATE_WORKSPACE' ? 'Register' : 'Admin'}
+        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-cyan-500 via-indigo-500 to-cyan-500"></div>
+        
+        <div className="text-center mb-10">
+          <div className="w-16 h-16 bg-cyan-50 text-cyan-600 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-inner">
+            {view === 'SUPER_ADMIN' ? <Lock size={32} /> : <Key size={32} />}
+          </div>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight leading-none mb-2">
+            {view === 'LOGIN' ? 'লগইন করুন' : view === 'CREATE_WORKSPACE' ? 'নতুন একাউন্ট' : 'সিস্টেম কন্ট্রোল'}
           </h1>
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">মুদ্রণ সহযোগী - v2.5</p>
         </div>
 
         {errorMessage && (
-          <div className={`p-3 rounded-xl mb-6 flex items-start gap-2 border text-[10px] font-bold leading-snug animate-in slide-in-from-top-1 ${
+          <div className={`p-4 rounded-2xl mb-6 flex items-start gap-3 border text-xs font-bold leading-relaxed animate-in slide-in-from-top-2 ${
             errorMessage.includes("অভিনন্দন") ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-rose-50 border-rose-100 text-rose-700'
           }`}>
-            <AlertCircle className="shrink-0 mt-0.5" size={12} />
+            <AlertCircle className="shrink-0 mt-0.5" size={16} />
             <p>{errorMessage}</p>
           </div>
         )}
@@ -144,14 +196,31 @@ const Login: React.FC<LoginProps> = ({ onLogin, settings }) => {
             />
           )}
 
-          <input 
-            type="text" 
-            className={inputStyle}
-            placeholder={view === 'CREATE_WORKSPACE' ? "স্বত্বাধিকারীর নাম" : "মোবাইল বা নাম দিন"}
-            value={userName}
-            onChange={(e) => setUserName(e.target.value)}
-            required
-          />
+          {view !== 'SUPER_ADMIN' ? (
+            <input 
+              type="text" 
+              className={inputStyle}
+              placeholder={view === 'CREATE_WORKSPACE' ? "স্বত্বাধিকারীর নাম" : "ইউজারনেম বা মোবাইল নম্বর"}
+              value={userName}
+              onChange={(e) => setUserName(e.target.value)}
+              required
+            />
+          ) : (
+             <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
+                <div className="relative">
+                   <Lock className="absolute left-4 top-4 text-slate-400" size={18} />
+                   <input 
+                    type="password" 
+                    className={inputStyle + " pl-12"}
+                    placeholder="মাস্টার পাসওয়ার্ড দিন"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    autoFocus
+                  />
+                </div>
+             </div>
+          )}
 
           {view === 'CREATE_WORKSPACE' && (
             <input 
@@ -165,44 +234,39 @@ const Login: React.FC<LoginProps> = ({ onLogin, settings }) => {
           )}
 
           {view === 'LOGIN' && (
-            <div className="flex justify-between items-center px-1">
-              <button type="button" onClick={() => setView('CREATE_WORKSPACE')} className="text-[10px] font-black text-cyan-500 uppercase tracking-tight hover:text-cyan-600">
-                New Workspace?
+            <div className="flex justify-between items-center px-2 py-1">
+              <button type="button" onClick={() => { setView('CREATE_WORKSPACE'); setErrorMessage(null); }} className="text-[10px] font-black text-cyan-600 uppercase tracking-widest hover:text-cyan-700">
+                Register New Workspace
               </button>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight cursor-help">Forgot?</span>
+            </div>
+          )}
+
+          {view === 'CREATE_WORKSPACE' && (
+            <div className="flex justify-center px-2 py-1">
+              <button type="button" onClick={() => { setView('LOGIN'); setErrorMessage(null); }} className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-cyan-600">
+                Back to Login
+              </button>
             </div>
           )}
 
           <button 
             type="submit" 
-            className="w-full py-4 rounded-2xl bg-gradient-to-br from-cyan-500 to-cyan-600 text-white font-black text-sm uppercase tracking-widest shadow-lg shadow-cyan-200 hover:shadow-xl active:scale-[0.96] transition-all"
+            disabled={loading}
+            className="w-full py-4 rounded-2xl bg-slate-900 text-white font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-black active:scale-[0.97] transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
           >
-            {view === 'CREATE_WORKSPACE' ? 'Register' : 'Login'}
+            {loading ? <Loader2 className="animate-spin" size={18} /> : (view === 'CREATE_WORKSPACE' ? 'Create Workspace' : 'Continue')}
+            {!loading && <ShieldAlert size={16} className={`transition-transform group-hover:scale-110 ${view === 'SUPER_ADMIN' ? 'text-rose-500' : 'text-cyan-500'}`} />}
           </button>
         </form>
-
-        <div className="mt-8 text-center">
-          <p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em] mb-4">Join with us</p>
+        
+        <div className="mt-12 text-center">
+          <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-5">Connect With Developers</p>
           <div className="flex justify-center gap-4">
-            {socialLinks.map((social, idx) => (
-              <a 
-                key={idx} 
-                href={social.link || '#'} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="w-10 h-10 rounded-xl bg-white border border-slate-50 shadow-sm flex items-center justify-center cursor-pointer hover:scale-110 hover:border-cyan-100 transition-all"
-              >
-                <social.icon size={18} className={social.color} />
-              </a>
-            ))}
+             <a href={settings.facebookPageLink} target="_blank" rel="noreferrer" className="p-2 bg-slate-50 rounded-xl text-blue-600 hover:bg-blue-50"><Facebook size={20}/></a>
+             <a href={settings.whatsappGroupLink} target="_blank" rel="noreferrer" className="p-2 bg-slate-50 rounded-xl text-emerald-600 hover:bg-emerald-50"><MessageCircle size={20}/></a>
+             <a href={settings.telegramChannelLink} target="_blank" rel="noreferrer" className="p-2 bg-slate-50 rounded-xl text-sky-500 hover:bg-sky-50"><Send size={20}/></a>
           </div>
-          
-          <button 
-            onClick={() => setView(view === 'CREATE_WORKSPACE' ? 'LOGIN' : 'CREATE_WORKSPACE')}
-            className="mt-8 text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-cyan-500 transition-colors"
-          >
-            User Licence Agreement
-          </button>
+          <p className="mt-8 text-[8px] text-slate-300 font-bold uppercase">© 2025 মুদ্রণ সহযোগী SaaS</p>
         </div>
       </div>
     </div>

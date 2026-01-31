@@ -139,6 +139,7 @@ export interface Transaction {
   amount: number;
   description: string;
   relatedOrderId?: string;
+  employeeId?: string;
 }
 
 export interface Employee {
