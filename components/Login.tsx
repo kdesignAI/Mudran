@@ -3,7 +3,6 @@ import React, { useState, useEffect } from 'react';
 import { Role, User, Workspace, WorkspaceStatus, AppSettings } from '../types';
 import { ShieldAlert, AlertCircle, MessageCircle, Facebook, Send, X, Lock, Key, Loader2 } from 'lucide-react';
 
-// Explicitly use current directory for API
 const API_URL = './api.php';
 
 interface LoginProps {
@@ -25,19 +24,20 @@ const Login: React.FC<LoginProps> = ({ onLogin, settings }) => {
 
   const fetchWorkspaces = async () => {
     try {
-      const response = await fetch(`${API_URL}?action=get_workspaces`);
+      const fullUrl = `${API_URL}?action=get_workspaces`;
+      const response = await fetch(fullUrl);
       if (!response.ok) {
-        // Log the exact URL that failed to help debugging 404s
-        console.error(`API Request failed: ${response.url} - Status: ${response.status}`);
-        throw new Error(`HTTP error! status: ${response.status}`);
+        console.error(`API Fetch Error: ${response.status} at ${fullUrl}`);
+        throw new Error(`HTTP ${response.status}: API not found.`);
       }
       const data = await response.json();
       if (Array.isArray(data)) {
         setWorkspaces(data);
         return data;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error fetching workspaces:", err);
+      setErrorMessage(`সার্ভারের সাথে যোগাযোগ বিচ্ছিন্ন (404)। এরর: ${err.message}`);
     }
     return [];
   };
@@ -74,6 +74,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, settings }) => {
         body: JSON.stringify(newWorkspace)
       });
       
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      
       const result = await response.json();
       
       if (result.status === 'success') {
@@ -84,8 +86,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, settings }) => {
       } else {
         setErrorMessage(result.error || "রেজিস্ট্রেশন ব্যর্থ হয়েছে।");
       }
-    } catch (err) {
-      setErrorMessage("সার্ভারের সাথে সংযোগ বিচ্ছিন্ন। api.php ফাইলটি পাওয়া যাচ্ছে না।");
+    } catch (err: any) {
+      setErrorMessage(`সার্ভারের সাথে সংযোগ বিচ্ছিন্ন (404/500)। এরর: ${err.message}`);
     } finally {
       setLoading(false);
     }

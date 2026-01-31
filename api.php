@@ -1,10 +1,10 @@
 <?php
 /**
- * Mudran Sahayogi Backend API v2.6
- * Fully Optimized for SaaS Data Persistence
+ * Mudran Sahayogi Backend API v2.9
+ * Optimized for Persistence, Reliability and Detailed Error Reporting
  */
 ob_start();
-error_reporting(0);
+error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
 header("Access-Control-Allow-Origin: *");
@@ -12,18 +12,21 @@ header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
 header("Content-Type: application/json; charset=UTF-8");
 
+// Database Configuration - Ensure these match your actual CPanel DB info
 $host = "localhost";
 $db_name = "khairulahsan_mudran"; 
 $username = "khairulahsan_mudran";     
 $password = "nEMem_kew4"; 
 
 try {
-    $conn = new PDO("mysql:host=$host;dbname=$db_name", $username, $password);
+    $conn = new PDO("mysql:host=$host;dbname=$db_name;charset=utf8", $username, $password);
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $conn->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 } catch(PDOException $e) {
     ob_end_clean();
-    echo json_encode(["error" => "Database Connection failed"]);
+    // Return 200 OK with error body so JS can catch it gracefully
+    http_response_code(200); 
+    echo json_encode(["error" => "Database Connection failed: " . $e->getMessage()]);
     exit;
 }
 
@@ -36,7 +39,9 @@ if ($method == 'OPTIONS') {
     exit;
 }
 
-$input = json_decode(file_get_contents("php://input"), true);
+// Get JSON input
+$raw_input = file_get_contents("php://input");
+$input = json_decode($raw_input, true);
 
 function sendJSON($data) {
     ob_end_clean();
@@ -50,36 +55,50 @@ function formatMySQLDate($isoDate) {
 }
 
 switch ($action) {
+    case 'ping':
+        sendJSON(["status" => "online", "message" => "API is reachable", "timestamp" => time()]);
+        break;
+
     case 'get_workspaces':
         try {
             $stmt = $conn->query("SELECT id, name, owner_name AS ownerName, owner_phone AS ownerPhone, status, subscription_type AS subscriptionType, expiry_date AS expiryDate, has_press_printing AS hasPressPrinting FROM workspaces ORDER BY created_at DESC");
             $res = $stmt->fetchAll();
             foreach ($res as &$w) {
-                $w['hasPressPrinting'] = (bool)$w['hasPressPrinting'];
+                $w['hasPressPrinting'] = (bool)($w['hasPressPrinting'] ?? true);
             }
-            sendJSON($res);
+            sendJSON($res ?: []);
         } catch (Exception $e) {
-            sendJSON(["error" => $e->getMessage()]);
+            sendJSON(["error" => "Fetch workspaces failed: " . $e->getMessage()]);
         }
         break;
 
-    case 'update_workspace':
-        if (!$input) sendJSON(["error" => "No Input"]);
+    case 'create_workspace':
+        if (!$input) sendJSON(["error" => "Invalid JSON input"]);
+        $conn->beginTransaction();
         try {
-            $expiryDate = formatMySQLDate($input['expiryDate']);
-            $hasPress = isset($input['hasPressPrinting']) ? ($input['hasPressPrinting'] ? 1 : 0) : 1;
-            
-            $stmt = $conn->prepare("UPDATE workspaces SET status = :status, subscription_type = :sub, expiry_date = :expiry, has_press_printing = :press WHERE id = :id");
+            $expiry = formatMySQLDate($input['expiryDate']);
+            $stmt = $conn->prepare("INSERT INTO workspaces (id, name, owner_name, owner_phone, expiry_date, subscription_type, status) VALUES (:id, :name, :oname, :ophone, :expiry, :sub, :status)");
             $stmt->execute([
-                ':status' => $input['status'], 
-                ':sub' => $input['subscriptionType'] ?? 'TRIAL', 
-                ':expiry' => $expiryDate, 
-                ':press' => $hasPress, 
-                ':id' => $input['id']
+                ':id' => $input['id'],
+                ':name' => $input['name'],
+                ':oname' => $input['ownerName'],
+                ':ophone' => $input['ownerPhone'],
+                ':expiry' => $expiry,
+                ':sub' => $input['subscriptionType'] ?? 'TRIAL',
+                ':status' => 'ACTIVE'
             ]);
+            
+            $stmt_settings = $conn->prepare("INSERT INTO settings (workspace_id, software_name, logo_text, theme_color, whatsapp_templates) VALUES (:wid, :sname, 'M', '#0891b2', '[]')");
+            $stmt_settings->execute([
+                ':wid' => $input['id'],
+                ':sname' => $input['name']
+            ]);
+            
+            $conn->commit();
             sendJSON(["status" => "success"]);
         } catch (Exception $e) {
-            sendJSON(["error" => $e->getMessage()]);
+            if ($conn->inTransaction()) $conn->rollBack();
+            sendJSON(["error" => "Workspace creation failed: " . $e->getMessage()]);
         }
         break;
 
@@ -157,7 +176,7 @@ switch ($action) {
             
             sendJSON($data);
         } catch (Exception $e) {
-            sendJSON(["error" => $e->getMessage()]);
+            sendJSON(["error" => "Get all data failed: " . $e->getMessage()]);
         }
         break;
 
@@ -175,7 +194,7 @@ switch ($action) {
                 ':dv' => $input['defaultDiscountValue'] ?? 0
             ]);
             sendJSON(["status" => "success"]);
-        } catch (Exception $e) { sendJSON(["error" => $e->getMessage()]); }
+        } catch (Exception $e) { sendJSON(["error" => "Save customer failed: " . $e->getMessage()]); }
         break;
 
     case 'save_inventory':
@@ -193,7 +212,7 @@ switch ($action) {
                 ':alert' => $input['alertLevel']
             ]);
             sendJSON(["status" => "success"]);
-        } catch (Exception $e) { sendJSON(["error" => $e->getMessage()]); }
+        } catch (Exception $e) { sendJSON(["error" => "Save inventory failed: " . $e->getMessage()]); }
         break;
 
     case 'save_employee':
@@ -212,7 +231,7 @@ switch ($action) {
                 ':role' => $input['role']
             ]);
             sendJSON(["status" => "success"]);
-        } catch (Exception $e) { sendJSON(["error" => $e->getMessage()]); }
+        } catch (Exception $e) { sendJSON(["error" => "Save employee failed: " . $e->getMessage()]); }
         break;
 
     case 'save_purchase':
@@ -248,25 +267,21 @@ switch ($action) {
                     ':total' => $item['total']
                 ]);
                 
-                // Inventory update logic
-                $upd_stmt = $conn->prepare("UPDATE inventory SET quantity = quantity + :qty, unit_price = :price WHERE id = :id AND workspace_id = :wid");
-                $upd_stmt->execute([':qty' => $item['quantity'], ':price' => $item['unitPrice'], ':id' => $item['inventoryItemId'], ':wid' => $workspace_id]);
+                $inv_upsert = $conn->prepare("INSERT INTO inventory (id, workspace_id, name, category, quantity, unit, unit_price, alert_level) 
+                    VALUES (:id, :wid, :name, :cat, :qty, :unit, :price, 5) 
+                    ON DUPLICATE KEY UPDATE quantity = quantity + VALUES(quantity), unit_price = VALUES(unit_price)");
                 
-                if ($upd_stmt->rowCount() == 0) {
-                    $ins_inv = $conn->prepare("REPLACE INTO inventory (id, workspace_id, name, category, quantity, unit, unit_price, alert_level) VALUES (:id, :wid, :name, :cat, :qty, :unit, :price, 5)");
-                    $ins_inv->execute([
-                        ':id' => $item['inventoryItemId'], 
-                        ':wid' => $workspace_id, 
-                        ':name' => $item['name'], 
-                        ':cat' => $item['category'] ?? 'Raw Material', 
-                        ':qty' => $item['quantity'], 
-                        ':unit' => $item['unit'] ?? 'Pcs', 
-                        ':price' => $item['unitPrice']
-                    ]);
-                }
+                $inv_upsert->execute([
+                    ':id' => $item['inventoryItemId'], 
+                    ':wid' => $workspace_id, 
+                    ':name' => $item['name'], 
+                    ':cat' => $item['category'] ?? 'Raw Material', 
+                    ':qty' => $item['quantity'], 
+                    ':unit' => $item['unit'] ?? 'Pcs', 
+                    ':price' => $item['unitPrice']
+                ]);
             }
             
-            // Auto Expense creation
             if ($input['paidAmount'] > 0) {
                 $tx_stmt = $conn->prepare("REPLACE INTO transactions (id, workspace_id, date, type, category, amount, description) VALUES (:id, :wid, :date, 'EXPENSE', 'Raw Materials', :amt, :des)");
                 $tx_stmt->execute([
@@ -282,7 +297,7 @@ switch ($action) {
             sendJSON(["status" => "success"]);
         } catch (Exception $e) {
             if ($conn->inTransaction()) $conn->rollBack();
-            sendJSON(["error" => $e->getMessage()]);
+            sendJSON(["error" => "Purchase save failed: " . $e->getMessage()]);
         }
         break;
 
@@ -341,7 +356,7 @@ switch ($action) {
             sendJSON(["status" => "success"]);
         } catch (Exception $e) {
             if ($conn->inTransaction()) $conn->rollBack();
-            sendJSON(["error" => $e->getMessage()]);
+            sendJSON(["error" => "Order save failed: " . $e->getMessage()]);
         }
         break;
 
@@ -362,7 +377,7 @@ switch ($action) {
                 ':eid' => $input['employeeId'] ?? null
             ]);
             sendJSON(["status" => "success"]);
-        } catch (Exception $e) { sendJSON(["error" => $e->getMessage()]); }
+        } catch (Exception $e) { sendJSON(["error" => "Save transaction failed: " . $e->getMessage()]); }
         break;
 
     case 'save_settings':
@@ -384,9 +399,9 @@ switch ($action) {
                 ':tg' => $input['telegramChannelLink'] ?? ''
             ]);
             sendJSON(["status" => "success"]);
-        } catch (Exception $e) { sendJSON(["error" => $e->getMessage()]); }
+        } catch (Exception $e) { sendJSON(["error" => "Save settings failed: " . $e->getMessage()]); }
         break;
 
     default:
-        sendJSON(["error" => "Unknown Action"]);
+        sendJSON(["error" => "Unknown Action: " . $action]);
 }

@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'mudran-v2-cache';
+const CACHE_NAME = 'mudran-v3.0-cache';
 const ASSETS = [
   './',
   './index.html',
@@ -14,6 +14,14 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  
+  // CRITICAL: Bypass cache for ANY request containing api.php
+  if (url.pathname.includes('api.php')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request);
